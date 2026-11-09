@@ -191,4 +191,25 @@ describe('planDay', () => {
 		expect(Date.now() - t).toBeLessThan(5000);
 		expect(plan.unplaced.length).toBe(0);
 	});
+
+	it('„Raum wie dieser“: bleibt im Wunschraum, zieht nur um, wenn ein anderer ihn braucht', () => {
+		const rooms = [room('kapelle', 40, 300, [PIANO]), room('gruppe', 15, 200)];
+		const hauskreis = slot({ persons: 12, wishRoomId: 'kapelle', currentRoomId: 'kapelle' });
+		// allein: Wunschraum trotz günstigerem Gruppenraum
+		expect(planDay(rooms, [hauskreis], W).assignment.get(hauskreis.key)).toBe('kapelle');
+		// Chor braucht das Klavier → Hauskreis weicht aus
+		const chor = slot({ persons: 35, featureIds: [PIANO], priority: 0 });
+		const plan = planDay(rooms, [hauskreis, chor], W);
+		expect(plan.assignment.get(chor.key)).toBe('kapelle');
+		expect(plan.assignment.get(hauskreis.key)).toBe('gruppe');
+	});
+
+	it('Vorrang: wichtige Gruppen ziehen seltener für eine kleine Ersparnis um', () => {
+		// Ersparnis 2 h × 500 = 1000 Punkte; Wechsel-Strafe 300 × Vorrang
+		const rooms = [room('a', 12, 100), room('b', 12, 600)];
+		const normal = slot({ persons: 10, currentRoomId: 'b', moveWeight: 1 });
+		expect(planDay(rooms, [normal], W).assignment.get(normal.key)).toBe('a');
+		const wichtig = slot({ persons: 10, currentRoomId: 'b', moveWeight: 4 });
+		expect(planDay(rooms, [wichtig], W).assignment.get(wichtig.key)).toBe('b');
+	});
 });

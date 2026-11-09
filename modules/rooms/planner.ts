@@ -6,10 +6,12 @@
  * - Flexible Buchungen: Kapazität ≥ Personen, alle geforderten Merkmale vorhanden, Raum buchbar und nicht gesperrt.
  * - Keine Überschneidung im selben Raum, inklusive Puffer (`bufferMinutes`) zwischen zwei Terminen.
  *
- * Kosten (kleiner ist besser, Einheit ≈ Cent)
- * - Heizkosten des Raums je Stunde × Dauer,
+ * Kosten (kleiner ist besser, Einheit „Punkte“)
+ * - Heizaufwand des Raums je Stunde × Dauer (`heatingCentsPerHour` = Stufe 1–10 × 100 Punkte),
+ * - „Raum wie dieser“: `wishRoomId` – jeder andere Raum kostet `WISH_PENALTY`, so dass die Buchung nur umzieht,
+ *   wenn es sonst nicht aufgeht (eine andere Gruppe braucht den Raum),
  * - Überdimensionierung: `oversizeCents` je freiem Platz (kleiner Raum bevorzugt, auch ohne Heizkosten-Angabe),
- * - Wechsel weg vom bisherigen Raum: `moveCents` (gegen unnötiges Hin-und-Her),
+ * - Wechsel weg vom bisherigen Raum: `moveCents` × `moveWeight` (Vorrang der Gruppe; wichtige Gruppen ziehen ungern um),
  * - Abweichung vom bevorzugten Raum einer Serie: `seriesCents` (jede Woche derselbe Raum),
  * - Rabatt „schon warm“: folgt ein Termin im selben Raum mit höchstens `warmGapMinutes` Abstand, spart er
  *   `warmPercent` % einer Heizstunde.
@@ -48,6 +50,10 @@ export interface PlanSlot {
 	preferredRoomId: string | null;
 	/** Höher = wird zuletzt zurückgestellt (bestehende Buchungen 1, neue/geänderte 0) */
 	priority: number;
+	/** „Raum wie dieser“: Wunschraum (andere passende Räume nur, wenn nötig) */
+	wishRoomId?: string | null;
+	/** Faktor auf die Wechsel-Strafe (Vorrang der Gruppe, Standard 1) */
+	moveWeight?: number;
 }
 
 export interface PlanWeights {
@@ -75,6 +81,9 @@ export interface DayPlan {
 	/** Nur Heizkosten (abzüglich „schon warm“) in Cent */
 	heatingCost: number;
 }
+
+/** Strafe für einen anderen als den Wunschraum („Raum wie dieser“) – größer als jede Heizersparnis */
+export const WISH_PENALTY = 50_000;
 
 /** Höchstzahl Suchschritte je Tag */
 const MAX_STEPS = 50_000;
@@ -138,7 +147,10 @@ export function candidatesFor(
 export function baseCost(slot: PlanSlot, room: PlanRoom, w: PlanWeights): number {
 	let cost = heatingCents(room, slot);
 	if (!slot.fixedRoomId) cost += w.oversizeCents * Math.max(0, room.capacity - slot.persons);
-	if (slot.currentRoomId && slot.currentRoomId !== room.id) cost += w.moveCents;
+	if (slot.currentRoomId && slot.currentRoomId !== room.id) {
+		cost += w.moveCents * (slot.moveWeight ?? 1);
+	}
+	if (slot.wishRoomId && slot.wishRoomId !== room.id) cost += WISH_PENALTY;
 	if (slot.preferredRoomId && slot.preferredRoomId !== room.id) cost += w.seriesCents;
 	return cost;
 }

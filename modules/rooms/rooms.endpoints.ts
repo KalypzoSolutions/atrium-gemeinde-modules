@@ -88,7 +88,7 @@ async function writeRoomFeatures(tx: Tx, roomId: string, ids: readonly string[])
 }
 
 const roomValues = (b: RoomInput) => sql`${b.name}, ${b.building}, ${b.description}, ${b.capacity},
-	${b.areaM2}, ${b.heatingCostCentsPerHour}, ${b.bookable}`;
+	${b.areaM2}, ${b.heatingLevel}, ${b.bookable}`;
 
 const summary = (o: PlanOutcome) => ({ moved: o.moves.length, unassigned: o.unassigned.length });
 
@@ -218,7 +218,7 @@ export const roomEndpoints: AnyApiEndpoint[] = [
 				const position = await nextPosition(tx, 'rooms');
 				await tx.execute(
 					sql`INSERT INTO rooms (id, name, building, description, capacity, area_m2,
-							heating_cost_cents_per_hour, bookable, position)
+							heating_level, bookable, position)
 						VALUES (${id}, ${roomValues(body)}, ${position})`
 				);
 				await writeRoomFeatures(tx, id, body.featureIds);
@@ -263,7 +263,7 @@ export const roomEndpoints: AnyApiEndpoint[] = [
 					tx,
 					sql`UPDATE rooms SET name = ${body.name}, building = ${body.building},
 							description = ${body.description}, capacity = ${body.capacity},
-							area_m2 = ${body.areaM2}, heating_cost_cents_per_hour = ${body.heatingCostCentsPerHour},
+							area_m2 = ${body.areaM2}, heating_level = ${body.heatingLevel},
 							bookable = ${body.bookable}, updated_at = now()
 						WHERE id = ${params.id} RETURNING id`
 				);

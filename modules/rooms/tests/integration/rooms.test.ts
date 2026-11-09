@@ -127,17 +127,17 @@ describe('Räume: Stammdaten', () => {
 		expect((await call('admin', 'POST', '/features', { name: 'klavier' })).status).toBe(409);
 
 		const defs = [
-			['Kirche', 200, 2000, ['Klavier']],
-			['Gemeindesaal', 80, 800, ['Beamer', 'Klavier', 'Ebenerdig']],
-			['Jugendraum', 20, 200, ['Beamer', 'Ebenerdig']],
-			['Kapelle', 12, 100, ['Klavier']]
+			['Kirche', 200, 10, ['Klavier']],
+			['Gemeindesaal', 80, 6, ['Beamer', 'Klavier', 'Ebenerdig']],
+			['Jugendraum', 20, 2, ['Beamer', 'Ebenerdig']],
+			['Kapelle', 12, 1, ['Klavier']]
 		] as const;
 		for (const [name, capacity, heat, f] of defs) {
 			const r = await ok<Room>('admin', 'POST', '/rooms', {
 				name,
 				building: 'Gemeindehaus',
 				capacity,
-				heatingCostCentsPerHour: heat,
+				heatingLevel: heat,
 				featureIds: f.map((x) => features[x])
 			});
 			rooms[name] = r.id;

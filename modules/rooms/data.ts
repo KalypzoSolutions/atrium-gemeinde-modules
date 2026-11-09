@@ -4,9 +4,13 @@
 import { sql } from 'drizzle-orm';
 import { inList, num, rowsOf, type Row, type Tx } from '$lib/sdk/server';
 import {
+	bookingMode,
+	DEFAULT_PRIORITY,
 	recurrenceRule,
 	type BookingMode,
 	type Feature,
+	type Group,
+	type MoveKind,
 	type RecurrenceRule,
 	type Room,
 	type RoomBlock
@@ -29,8 +33,11 @@ export interface BookingRow {
 	eventId: string | null;
 	managedByEvent: boolean;
 	featureIds: string[];
+	groupId: string | null;
 	/** Abgesagte Termine (ursprüngliches Datum) */
 	cancelled: Set<string>;
+	/** Von Hand festgelegte Räume einzelner Termine (Datum → Raum) */
+	pinned: Map<string, string>;
 }
 
 const text = (v: unknown): string | null => (v == null || v === '' ? null : String(v));
@@ -78,7 +85,7 @@ function toRoom(r: Row, features: Map<string, string[]>): Room {
 		description: text(r.description),
 		capacity: num(r.capacity),
 		areaM2: r.area_m2 == null ? null : Number(r.area_m2),
-		heatingCostCentsPerHour: num(r.heating_cost_cents_per_hour),
+		heatingLevel: num(r.heating_level) || 5,
 		bookable: bool(r.bookable),
 		position: num(r.position),
 		featureIds: features.get(id) ?? []
@@ -88,7 +95,7 @@ function toRoom(r: Row, features: Map<string, string[]>): Room {
 export async function loadRooms(tx: Tx): Promise<Room[]> {
 	const rows = await rowsOf(
 		tx,
-		sql`SELECT id, name, building, description, capacity, area_m2, heating_cost_cents_per_hour,
+		sql`SELECT id, name, building, description, capacity, area_m2, heating_level,
 				bookable, position
 			FROM rooms ORDER BY position, lower(name), id`
 	);
@@ -142,7 +149,7 @@ export async function loadBlocks(
 const BOOKING_COLUMNS = sql`b.id, b.title, b.description, b.owner_id, b.created_by, b.mode,
 	b.fixed_room_id, b.persons, to_char(b.starts_on, 'YYYY-MM-DD') AS starts_on, b.starts_at, b.ends_at,
 	b.recurrence, to_char(b.recurrence_until, 'YYYY-MM-DD') AS recurrence_until, b.event_id,
-	b.managed_by_event`;
+	b.managed_by_event, b.group_id`;
 
 async function hydrate(tx: Tx, rows: Row[]): Promise<BookingRow[]> {
 	if (!rows.length) return [];
@@ -153,8 +160,8 @@ async function hydrate(tx: Tx, rows: Row[]): Promise<BookingRow[]> {
 	);
 	const exceptions = await rowsOf(
 		tx,
-		sql`SELECT booking_id, to_char(occurrence_date, 'YYYY-MM-DD') AS d FROM booking_exceptions
-			WHERE cancelled AND booking_id IN (${inList(ids)})`
+		sql`SELECT booking_id, to_char(occurrence_date, 'YYYY-MM-DD') AS d, cancelled, pinned_room_id
+			FROM booking_exceptions WHERE booking_id IN (${inList(ids)})`
 	);
 	const fMap = new Map<string, string[]>();
 	for (const f of features) {
@@ -163,10 +170,18 @@ async function hydrate(tx: Tx, rows: Row[]): Promise<BookingRow[]> {
 		fMap.set(String(f.booking_id), list);
 	}
 	const xMap = new Map<string, Set<string>>();
+	const pMap = new Map<string, Map<string, string>>();
 	for (const x of exceptions) {
-		const set = xMap.get(String(x.booking_id)) ?? new Set<string>();
-		set.add(String(x.d));
-		xMap.set(String(x.booking_id), set);
+		const bid = String(x.booking_id);
+		if (bool(x.cancelled)) {
+			const set = xMap.get(bid) ?? new Set<string>();
+			set.add(String(x.d));
+			xMap.set(bid, set);
+		} else if (x.pinned_room_id != null) {
+			const map = pMap.get(bid) ?? new Map<string, string>();
+			map.set(String(x.d), String(x.pinned_room_id));
+			pMap.set(bid, map);
+		}
 	}
 	return rows.map((r) => {
 		const id = String(r.id);
@@ -176,7 +191,7 @@ async function hydrate(tx: Tx, rows: Row[]): Promise<BookingRow[]> {
 			description: text(r.description),
 			ownerId: String(r.owner_id),
 			createdBy: text(r.created_by),
-			mode: String(r.mode) === 'fixed' ? 'fixed' : 'flexible',
+			mode: bookingMode.safeParse(String(r.mode)).data ?? 'flexible',
 			fixedRoomId: text(r.fixed_room_id),
 			persons: num(r.persons),
 			startsOn: String(r.starts_on),
@@ -187,7 +202,9 @@ async function hydrate(tx: Tx, rows: Row[]): Promise<BookingRow[]> {
 			eventId: text(r.event_id),
 			managedByEvent: bool(r.managed_by_event),
 			featureIds: fMap.get(id) ?? [],
-			cancelled: xMap.get(id) ?? new Set()
+			groupId: text(r.group_id),
+			cancelled: xMap.get(id) ?? new Set(),
+			pinned: pMap.get(id) ?? new Map()
 		};
 	});
 }
@@ -251,6 +268,7 @@ export interface BookingWrite {
 	recurrenceUntil: string | null;
 	eventId: string | null;
 	managedByEvent: boolean;
+	groupId: string | null;
 }
 
 export async function insertBooking(
@@ -262,11 +280,11 @@ export async function insertBooking(
 ): Promise<void> {
 	await tx.execute(
 		sql`INSERT INTO bookings (id, title, description, owner_id, created_by, mode, fixed_room_id, persons,
-				starts_on, starts_at, ends_at, recurrence, recurrence_until, event_id, managed_by_event)
+				starts_on, starts_at, ends_at, recurrence, recurrence_until, event_id, managed_by_event, group_id)
 			VALUES (${id}, ${b.title}, ${b.description}, ${ownerId}, ${createdBy}, ${b.mode},
-				${b.mode === 'fixed' ? b.roomId : null}, ${b.persons}, ${b.startsOn}::date, ${b.startsAt},
+				${b.mode === 'flexible' ? null : b.roomId}, ${b.persons}, ${b.startsOn}::date, ${b.startsAt},
 				${b.endsAt}, ${b.recurrence ? JSON.stringify(b.recurrence) : null}::jsonb,
-				${b.recurrenceUntil}::date, ${b.eventId}, ${b.managedByEvent})`
+				${b.recurrenceUntil}::date, ${b.eventId}, ${b.managedByEvent}, ${b.groupId})`
 	);
 	await replaceBookingFeatures(tx, id, b.featureIds);
 }
@@ -274,7 +292,8 @@ export async function insertBooking(
 export async function updateBooking(tx: Tx, id: string, b: BookingWrite): Promise<void> {
 	await tx.execute(
 		sql`UPDATE bookings SET title = ${b.title}, description = ${b.description}, mode = ${b.mode},
-				fixed_room_id = ${b.mode === 'fixed' ? b.roomId : null}, persons = ${b.persons},
+				fixed_room_id = ${b.mode === 'flexible' ? null : b.roomId}, persons = ${b.persons},
+				group_id = ${b.groupId},
 				starts_on = ${b.startsOn}::date, starts_at = ${b.startsAt}, ends_at = ${b.endsAt},
 				recurrence = ${b.recurrence ? JSON.stringify(b.recurrence) : null}::jsonb,
 				recurrence_until = ${b.recurrenceUntil}::date, event_id = ${b.eventId}, updated_at = now()
@@ -290,4 +309,97 @@ async function replaceBookingFeatures(tx: Tx, id: string, featureIds: string[]):
 			sql`INSERT INTO booking_features (booking_id, feature_id) VALUES (${id}, ${f})`
 		);
 	}
+}
+
+// --- Gruppen -----------------------------------------------------------------------------------
+
+export async function loadGroups(tx: Tx): Promise<Group[]> {
+	const rows = await rowsOf(
+		tx,
+		sql`SELECT g.id, g.name, g.color, g.priority, g.position,
+				(SELECT count(*) FROM bookings b WHERE b.group_id = g.id) AS booking_count
+			FROM groups g ORDER BY g.priority DESC, g.position, lower(g.name), g.id`
+	);
+	return rows.map((r) => ({
+		id: String(r.id),
+		name: String(r.name),
+		color: text(r.color),
+		priority: num(r.priority),
+		position: num(r.position),
+		bookingCount: num(r.booking_count)
+	}));
+}
+
+/** Vorrang je Gruppe (Gruppe unbekannt/ohne → `DEFAULT_PRIORITY`) */
+export async function groupPriorities(tx: Tx): Promise<Map<string, number>> {
+	const rows = await rowsOf(tx, sql`SELECT id, priority FROM groups`);
+	return new Map(rows.map((r) => [String(r.id), num(r.priority) || DEFAULT_PRIORITY]));
+}
+
+// --- Verlegungen -------------------------------------------------------------------------------
+
+/** Anzahl automatischer Verlegungen je Buchung seit `since` (ISO-Datum) */
+export async function autoMoveCounts(tx: Tx, since: string): Promise<Map<string, number>> {
+	const rows = await rowsOf(
+		tx,
+		sql`SELECT booking_id, count(*) AS n FROM moves
+			WHERE kind = 'auto' AND created_at >= ${since}::date GROUP BY booking_id`
+	);
+	return new Map(rows.map((r) => [String(r.booking_id), num(r.n)]));
+}
+
+export interface MoveWrite {
+	bookingId: string;
+	date: string;
+	fromRoomId: string | null;
+	toRoomId: string | null;
+}
+
+/** Verlegungen protokollieren; Widerspruch bis `objectionHours` nach jetzt (0 = keiner) */
+export async function insertMoves(
+	tx: Tx,
+	moves: readonly MoveWrite[],
+	opts: { kind: MoveKind; reason: string | null; createdBy: string | null; objectionHours: number }
+): Promise<string[]> {
+	const ids: string[] = [];
+	for (const m of moves) {
+		const id = crypto.randomUUID();
+		ids.push(id);
+		await tx.execute(
+			sql`INSERT INTO moves (id, booking_id, occurrence_date, from_room_id, to_room_id, kind, reason,
+					created_by, objection_until)
+				VALUES (${id}, ${m.bookingId}, ${m.date}::date, ${m.fromRoomId}, ${m.toRoomId}, ${opts.kind},
+					${opts.reason}, ${opts.createdBy},
+					${opts.objectionHours > 0 ? sql`now() + make_interval(hours => ${opts.objectionHours})` : sql`NULL`})`
+		);
+	}
+	return ids;
+}
+
+/** Einzeltermin in einen Raum legen (`null` = Festlegung aufheben) */
+export async function pinOccurrence(
+	tx: Tx,
+	bookingId: string,
+	date: string,
+	roomId: string | null,
+	userId: string | null
+): Promise<void> {
+	if (roomId === null) {
+		await tx.execute(
+			sql`UPDATE booking_exceptions SET pinned_room_id = NULL, updated_by = ${userId}, updated_at = now()
+				WHERE booking_id = ${bookingId} AND occurrence_date = ${date}::date`
+		);
+		await tx.execute(
+			sql`DELETE FROM booking_exceptions WHERE booking_id = ${bookingId}
+				AND occurrence_date = ${date}::date AND NOT cancelled AND pinned_room_id IS NULL`
+		);
+		return;
+	}
+	await tx.execute(
+		sql`INSERT INTO booking_exceptions (booking_id, occurrence_date, cancelled, pinned_room_id, updated_by)
+			VALUES (${bookingId}, ${date}::date, FALSE, ${roomId}, ${userId})
+			ON CONFLICT (booking_id, occurrence_date)
+			DO UPDATE SET pinned_room_id = EXCLUDED.pinned_room_id, cancelled = FALSE,
+				updated_by = EXCLUDED.updated_by, updated_at = now()`
+	);
 }

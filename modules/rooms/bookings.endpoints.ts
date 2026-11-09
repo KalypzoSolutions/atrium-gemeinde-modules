@@ -26,6 +26,7 @@ import {
 	finishDetail,
 	listOccurrences,
 	noRoomError,
+	swapOptionsFor,
 	requireEditable,
 	requireFixPermission,
 	toWrite,
@@ -140,7 +141,7 @@ export const bookingEndpoints: AnyApiEndpoint[] = [
 					subjectIds: new Set([id]),
 					overlay: [virtual]
 				});
-				return availabilityOf(outcome, id, countBeyondHorizon(pc, spec));
+				return availabilityOf(tx, pc, outcome, virtual, countBeyondHorizon(pc, spec));
 			});
 		}
 	}),
@@ -184,9 +185,16 @@ export const bookingEndpoints: AnyApiEndpoint[] = [
 				const b = (await loadBooking(tx, id))!;
 				const outcome = await replan(tx, pc, {
 					dates: plannedDates(b, pc),
-					subjectIds: new Set([id])
+					subjectIds: new Set([id]),
+					reason: `Platz für „${body.title}“`,
+					actorId: ctx.userId
 				});
-				if (outcome.subjectConflicts.length) throw noRoomError(outcome.subjectConflicts);
+				if (outcome.subjectConflicts.length) {
+					throw noRoomError(
+						outcome.subjectConflicts,
+						await swapOptionsFor(tx, pc, outcome, b, ownerId)
+					);
+				}
 				return { raw: await buildDetail(tx, ctx, pc, b), outcome };
 			});
 			await core.audit.logFromContext(ctx, 'rooms.booking.created', {
@@ -222,7 +230,9 @@ export const bookingEndpoints: AnyApiEndpoint[] = [
 				const after = (await loadBooking(tx, params.id))!;
 				const outcome = await replan(tx, pc, {
 					dates: new Set([...plannedDates(before, pc), ...plannedDates(after, pc)]),
-					subjectIds: new Set([params.id])
+					subjectIds: new Set([params.id]),
+					reason: `Platz für „${body.title}“`,
+					actorId: ctx.userId
 				});
 				if (outcome.subjectConflicts.length) throw noRoomError(outcome.subjectConflicts);
 				return { raw: await buildDetail(tx, ctx, pc, after), outcome };
@@ -249,7 +259,11 @@ export const bookingEndpoints: AnyApiEndpoint[] = [
 				await lockPlanning(tx);
 				const b = requireEditable(ctx, await loadBooking(tx, params.id));
 				await tx.execute(sql`DELETE FROM bookings WHERE id = ${params.id}`);
-				return replan(tx, pc, { dates: plannedDates(b, pc) });
+				return replan(tx, pc, {
+					dates: plannedDates(b, pc),
+					reason: `Raum frei geworden („${b.title}“ gelöscht)`,
+					actorId: ctx.userId
+				});
 			});
 			await core.audit.logFromContext(ctx, 'rooms.booking.deleted', { target: params.id });
 			await notifyPlanChanges(ctx, outcome);
@@ -304,11 +318,15 @@ export const bookingEndpoints: AnyApiEndpoint[] = [
 				requireEditable(ctx, await loadBooking(tx, params.id));
 				const rows = await rowsOf(
 					tx,
-					sql`DELETE FROM booking_exceptions
-						WHERE booking_id = ${params.id} AND occurrence_date = ${params.date}::date
+					sql`UPDATE booking_exceptions SET cancelled = FALSE, updated_by = ${ctx.userId}, updated_at = now()
+						WHERE booking_id = ${params.id} AND occurrence_date = ${params.date}::date AND cancelled
 						RETURNING booking_id`
 				);
 				if (!rows.length) throw errors.notFound('Termin ist nicht abgesagt');
+				await tx.execute(
+					sql`DELETE FROM booking_exceptions WHERE booking_id = ${params.id}
+						AND occurrence_date = ${params.date}::date AND NOT cancelled AND pinned_room_id IS NULL`
+				);
 				const outcome = await replan(tx, pc, {
 					dates: [params.date],
 					subjectIds: new Set([params.id])

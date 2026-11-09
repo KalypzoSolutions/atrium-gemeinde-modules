@@ -10,6 +10,9 @@ import { roomsService } from './refs.service';
 import { roomEndpoints } from './rooms.endpoints';
 import {
 	NOTIFY_MOVED,
+	NOTIFY_OBJECTION,
+	NOTIFY_SWAP,
+	NOTIFY_SWAP_ANSWER,
 	NOTIFY_UNASSIGNED,
 	PERM_CREATE,
 	PERM_EDIT_ALL,
@@ -21,7 +24,9 @@ import {
 	SETTING_DEFAULTS
 } from './schemas';
 import { roomsSearch } from './search';
+import { workflowEndpoints } from './workflow.endpoints';
 import m0001 from './migrations/0001_init.sql?raw';
+import m0002 from './migrations/0002_raumplanung2.sql?raw';
 
 const int = (min: number, max: number) => z.number().int().min(min).max(max);
 
@@ -119,7 +124,10 @@ export default defineModule({
 			default: SETTING_DEFAULTS.seriesCents
 		}
 	],
-	migrations: [{ name: '0001_init', sql: m0001 }],
+	migrations: [
+		{ name: '0001_init', sql: m0001 },
+		{ name: '0002_raumplanung2', sql: m0002 }
+	],
 	search: roomsSearch,
 	dashboard: roomsDashboard,
 	notifications: {
@@ -130,6 +138,28 @@ export default defineModule({
 				description: 'Wenn eine deiner Buchungen automatisch in einen anderen Raum verlegt wurde.',
 				defaultChannel: 'email',
 				permission: PERM_VIEW
+			},
+			{
+				key: NOTIFY_SWAP,
+				label: 'Tauschanfrage',
+				description: 'Wenn eine andere Gruppe um den Raum deiner festen Buchung bittet.',
+				defaultChannel: 'email',
+				permission: PERM_VIEW
+			},
+			{
+				key: NOTIFY_SWAP_ANSWER,
+				label: 'Antwort auf Tauschanfrage',
+				description: 'Wenn deine Tauschanfrage angenommen, abgelehnt oder abgelaufen ist.',
+				defaultChannel: 'email',
+				permission: PERM_VIEW
+			},
+			{
+				key: NOTIFY_OBJECTION,
+				label: 'Widerspruch gegen Verlegung',
+				description:
+					'Für die Raumverwaltung: eine Gruppe ist mit ihrem neuen Raum nicht einverstanden.',
+				defaultChannel: 'email',
+				permission: PERM_MANAGE
 			},
 			{
 				key: NOTIFY_UNASSIGNED,
@@ -148,6 +178,6 @@ export default defineModule({
 	subjectExport,
 	/** Dienst für andere Module (`RoomsService`, siehe `contract.ts`) */
 	provides: roomsService satisfies RoomsService,
-	// Feste Pfade vor `:id`-Mustern
-	endpoints: [...planEndpoints, ...roomEndpoints, ...bookingEndpoints]
+	// Feste Pfade vor `:id`-Mustern; die Vorkommen-Unterpfade (`…/room`, `…/targets`) vor `bookingEndpoints`
+	endpoints: [...planEndpoints, ...roomEndpoints, ...workflowEndpoints, ...bookingEndpoints]
 });

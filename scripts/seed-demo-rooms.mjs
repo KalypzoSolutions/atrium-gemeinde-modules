@@ -62,25 +62,25 @@ for (const name of ['Klavier', 'Orgel', 'Beamer', 'Ebenerdig', 'Küche', 'Kinder
 }
 
 const ROOMS = [
-	{ name: 'Kirche', capacity: 250, heat: 2500, area: 400, f: ['Orgel', 'Klavier', 'Ebenerdig'] },
+	{ name: 'Kirche', capacity: 250, heat: 9, area: 400, f: ['Orgel', 'Klavier', 'Ebenerdig'] },
 	{
 		name: 'Gemeindesaal',
 		capacity: 120,
-		heat: 900,
+		heat: 7,
 		area: 160,
 		f: ['Klavier', 'Beamer', 'Ebenerdig', 'Küche']
 	},
 	{
 		name: 'Jugendraum',
 		capacity: 25,
-		heat: 250,
+		heat: 3,
 		area: 45,
 		f: ['Beamer'],
 		building: 'Untergeschoss'
 	},
-	{ name: 'Gruppenraum 1', capacity: 15, heat: 150, area: 25, f: ['Ebenerdig', 'Kinderecke'] },
-	{ name: 'Gruppenraum 2', capacity: 12, heat: 120, area: 22, f: ['Ebenerdig'] },
-	{ name: 'Kapelle', capacity: 30, heat: 300, area: 50, f: ['Klavier'] }
+	{ name: 'Gruppenraum 1', capacity: 15, heat: 2, area: 25, f: ['Ebenerdig', 'Kinderecke'] },
+	{ name: 'Gruppenraum 2', capacity: 12, heat: 2, area: 22, f: ['Ebenerdig'] },
+	{ name: 'Kapelle', capacity: 30, heat: 3, area: 50, f: ['Klavier'] }
 ];
 const rooms = new Map(meta.rooms.map((r) => [r.name, r.id]));
 for (const r of ROOMS) {
@@ -91,7 +91,7 @@ for (const r of ROOMS) {
 		description: null,
 		capacity: r.capacity,
 		areaM2: r.area,
-		heatingCostCentsPerHour: r.heat,
+		heatingLevel: r.heat,
 		bookable: true,
 		featureIds: r.f.map((x) => features.get(x)).filter(Boolean)
 	});
@@ -110,11 +110,27 @@ const next = (weekday) => {
 	return d;
 };
 
+// Gruppen mit Farbe und Vorrang (4 = Gottesdienst … 1 = Fremdnutzung)
+const GROUPS = [
+	{ name: 'Gottesdienst', color: '#0891b2', priority: 4 },
+	{ name: 'Kirchenmusik', color: '#7c3aed', priority: 3 },
+	{ name: 'Konfirmanden & Jugend', color: '#dc2626', priority: 3 },
+	{ name: 'Gemeindegruppen', color: '#d97706', priority: 3 },
+	{ name: 'Kita', color: '#16a34a', priority: 2 }
+];
+const groups = new Map((meta.groups ?? []).map((g) => [g.name, g.id]));
+for (const g of GROUPS) {
+	if (groups.has(g.name)) continue;
+	const r = await call('POST', `${R}/groups`, g);
+	if (r.json?.data) groups.set(g.name, r.json.data.id);
+}
+
 const weekly = (byWeekday) => ({ freq: 'weekly', interval: 1, byWeekday, end: { type: 'never' } });
 const BOOKINGS = [
 	{
 		title: 'Gottesdienst',
 		mode: 'fixed',
+		group: 'Gottesdienst',
 		room: 'Kirche',
 		persons: 120,
 		day: 7,
@@ -124,7 +140,10 @@ const BOOKINGS = [
 	},
 	{
 		title: 'Kirchenchor',
-		persons: 35,
+		group: 'Kirchenmusik',
+		mode: 'similar',
+		room: 'Kapelle',
+		persons: 28,
 		f: ['Klavier'],
 		day: 3,
 		from: '19:30',
@@ -133,6 +152,7 @@ const BOOKINGS = [
 	},
 	{
 		title: 'Konfirmandenunterricht',
+		group: 'Konfirmanden & Jugend',
 		persons: 18,
 		f: ['Beamer'],
 		day: 2,
@@ -142,6 +162,9 @@ const BOOKINGS = [
 	},
 	{
 		title: 'Seniorenkreis',
+		group: 'Gemeindegruppen',
+		mode: 'similar',
+		room: 'Gruppenraum 1',
 		persons: 14,
 		f: ['Ebenerdig'],
 		day: 4,
@@ -151,6 +174,7 @@ const BOOKINGS = [
 	},
 	{
 		title: 'Krabbelgruppe',
+		group: 'Kita',
 		persons: 10,
 		f: ['Kinderecke'],
 		day: 1,
@@ -160,6 +184,7 @@ const BOOKINGS = [
 	},
 	{
 		title: 'Kirchenvorstand',
+		group: 'Gemeindegruppen',
 		persons: 9,
 		day: 2,
 		from: '19:30',
@@ -168,6 +193,7 @@ const BOOKINGS = [
 	},
 	{
 		title: 'Gemeindefest – Vorbereitung',
+		group: 'Gemeindegruppen',
 		persons: 40,
 		f: ['Küche'],
 		day: 6,
@@ -194,7 +220,8 @@ for (const b of BOOKINGS) {
 		startsAt: b.from,
 		endsAt: b.to,
 		recurrence: b.rec,
-		eventId: null
+		eventId: null,
+		groupId: b.group ? (groups.get(b.group) ?? null) : null
 	});
 	console.log(`${b.title}: ${r.status}`);
 }

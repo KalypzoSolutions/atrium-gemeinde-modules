@@ -15,6 +15,9 @@ export const PERM_SETTINGS = 'rooms.settings.manage';
 
 export const NOTIFY_MOVED = 'booking-moved';
 export const NOTIFY_UNASSIGNED = 'booking-unassigned';
+export const NOTIFY_SWAP = 'swap-request';
+export const NOTIFY_SWAP_ANSWER = 'swap-answer';
+export const NOTIFY_OBJECTION = 'move-objected';
 
 /** Einstellungsschlüssel */
 export const SETTING = {
@@ -112,8 +115,8 @@ export const roomInput = z.object({
 	description: z.string().trim().max(2000).nullable().default(null),
 	capacity: z.number().int().min(1, 'Mindestens 1 Person').max(5000),
 	areaM2: z.number().min(0).max(100000).nullable().default(null),
-	/** Geschätzte Heizkosten je Stunde in Cent – Grundlage der Optimierung */
-	heatingCostCentsPerHour: z.number().int().min(0).max(1_000_000).default(0),
+	/** Heizaufwand 1 (kaum, schnell warm) bis 10 (sehr hoch, z. B. Kirchenschiff) – Grundlage der Optimierung */
+	heatingLevel: z.number().int().min(1, 'Stufe 1 bis 10').max(10, 'Stufe 1 bis 10').default(5),
 	bookable: z.boolean().default(true),
 	featureIds: z.array(z.uuid()).max(100).default([])
 });
@@ -126,7 +129,8 @@ export interface Room {
 	description: string | null;
 	capacity: number;
 	areaM2: number | null;
-	heatingCostCentsPerHour: number;
+	/** Heizaufwand 1–10 */
+	heatingLevel: number;
 	bookable: boolean;
 	position: number;
 	featureIds: string[];
@@ -156,13 +160,63 @@ export interface RoomBlock {
 
 // --- Buchungen ---------------------------------------------------------------------------------
 
-export const bookingMode = z.enum(['fixed', 'flexible']);
+/**
+ * Wie beweglich eine Buchung ist: `fixed` = genau dieser Raum, nie verlegen; `similar` = „Raum wie dieser“
+ * (Wunschraum, zieht nur um, wenn eine andere Gruppe ihn braucht); `flexible` = irgendein passender Raum.
+ */
+export const bookingMode = z.enum(['fixed', 'similar', 'flexible']);
 export type BookingMode = z.infer<typeof bookingMode>;
 
 export const BOOKING_MODE_LABELS: Record<BookingMode, string> = {
-	fixed: 'Raum festgelegt',
+	fixed: 'Nur dieser Raum',
+	similar: 'Raum wie dieser',
 	flexible: 'Nach Anforderungen'
 };
+
+export const BOOKING_MODE_HINTS: Record<BookingMode, string> = {
+	fixed: 'Wird nie verlegt · eigenes Recht',
+	similar: 'Wunschraum, sonst gleichwertig',
+	flexible: 'Hauptsache passend'
+};
+
+/** Braucht die Stufe einen (Wunsch-)Raum? */
+export const needsRoom = (mode: BookingMode) => mode !== 'flexible';
+
+/** Punkte je Heizstufe und Stunde (Planer-Einheit) */
+export const HEAT_POINTS_PER_LEVEL = 100;
+
+// --- Gruppen -----------------------------------------------------------------------------------
+
+/** Vorrang: 4 = Gottesdienst und Kasualien … 1 = Fremdnutzung */
+export const GROUP_PRIORITIES = [4, 3, 2, 1] as const;
+export const GROUP_PRIORITY_LABELS: Record<number, string> = {
+	4: 'Gottesdienst und Kasualien',
+	3: 'Regelmäßige Gruppen',
+	2: 'Einmalige Veranstaltungen',
+	1: 'Fremdnutzung'
+};
+/** Vorrang ohne Gruppe */
+export const DEFAULT_PRIORITY = 2;
+
+export const groupInput = z.object({
+	name: z.string().trim().min(1, 'Name fehlt').max(80),
+	color: z
+		.string()
+		.regex(/^#[0-9a-f]{6}$/, 'Farbe als #rrggbb')
+		.nullable()
+		.default(null),
+	priority: z.number().int().min(1).max(4).default(3)
+});
+export type GroupInput = z.infer<typeof groupInput>;
+
+export interface Group {
+	id: string;
+	name: string;
+	color: string | null;
+	priority: number;
+	position: number;
+	bookingCount: number;
+}
 
 /** Raum-Anforderung ohne Zeitangaben (gemeinsam mit dem Termine-Modul) */
 export const roomRequest = z
@@ -172,7 +226,7 @@ export const roomRequest = z
 		persons: z.number().int().min(1, 'Mindestens 1 Person').max(5000),
 		featureIds: z.array(z.uuid()).max(50).default([])
 	})
-	.refine((r) => r.mode !== 'fixed' || !!r.roomId, {
+	.refine((r) => !needsRoom(r.mode) || !!r.roomId, {
 		message: 'Bitte einen Raum wählen',
 		path: ['roomId']
 	});
@@ -190,7 +244,9 @@ const bookingFields = z.object({
 	endsAt: timeString,
 	recurrence: recurrenceRule.nullable().default(null),
 	/** Verweis auf einen Termin im Modul `events` (nur Verknüpfung, Zeiten bleiben eigene) */
-	eventId: z.string().min(1).max(100).nullable().default(null)
+	eventId: z.string().min(1).max(100).nullable().default(null),
+	/** Gruppe (Farbe, Vorrang) */
+	groupId: z.uuid().nullable().default(null)
 });
 
 /** Prüfungen, die für Buchungen und Termine-Kopplung gleich sind */
@@ -205,7 +261,7 @@ export function checkBookingShape(
 	},
 	ctx: z.RefinementCtx
 ): void {
-	if (b.mode === 'fixed' && !b.roomId) {
+	if (needsRoom(b.mode) && !b.roomId) {
 		ctx.addIssue({ code: 'custom', message: 'Bitte einen Raum wählen', path: ['roomId'] });
 	}
 	if (b.endsAt <= b.startsAt) {
@@ -244,7 +300,8 @@ export const occurrencesQuery = z.object({
 	unassigned: z
 		.enum(['0', '1'])
 		.optional()
-		.transform((v) => v === '1')
+		.transform((v) => v === '1'),
+	groupId: z.uuid().optional()
 });
 
 export const myQuery = z.object({
@@ -275,6 +332,18 @@ export interface Occurrence {
 	eventId: string | null;
 	/** Über das Termine-Modul angelegt und gepflegt */
 	managedByEvent: boolean;
+	groupId: string | null;
+	groupName: string | null;
+	groupColor: string | null;
+	/** Von Hand in diesen Raum gelegt (Drag & Drop) */
+	pinned: boolean;
+	/** Zuletzt verlegt (innerhalb der letzten 14 Tage), sonst `null` */
+	moved: {
+		moveId: string;
+		fromRoomName: string | null;
+		kind: MoveKind;
+		objectionOpen: boolean;
+	} | null;
 }
 
 export interface BookingDetail {
@@ -296,9 +365,137 @@ export interface BookingDetail {
 	ownerName: string | null;
 	canEdit: boolean;
 	cancelledDates: string[];
+	groupId: string | null;
+	groupName: string | null;
 	/** Kommende Vorkommen (höchstens 30) */
-	upcoming: { date: string; roomId: string | null; roomName: string | null; cancelled: boolean }[];
+	upcoming: {
+		date: string;
+		roomId: string | null;
+		roomName: string | null;
+		cancelled: boolean;
+		pinned: boolean;
+	}[];
+	/** Verlegungen der kommenden Termine (neueste zuerst) */
+	moves: MoveInfo[];
 }
+
+// --- Verlegungen -------------------------------------------------------------------------------
+
+export type MoveKind = 'auto' | 'manual';
+
+/** Widerspruchsfrist nach einer Verlegung (Stunden) */
+export const OBJECTION_HOURS = 48;
+/** Höchstzahl automatischer Verlegungen je Buchung in 30 Tagen (danach bleibt sie, wo sie ist) */
+export const MAX_AUTO_MOVES = 2;
+
+export interface MoveInfo {
+	id: string;
+	bookingId: string;
+	title: string;
+	date: string;
+	fromRoomId: string | null;
+	fromRoomName: string | null;
+	toRoomId: string | null;
+	toRoomName: string | null;
+	kind: MoveKind;
+	reason: string | null;
+	createdAt: string;
+	objectionUntil: string | null;
+	objectedAt: string | null;
+	objectionNote: string | null;
+	resolvedAt: string | null;
+	ownerId: string;
+	/** Die aufrufende Person darf noch widersprechen */
+	canObject: boolean;
+}
+
+export const moveParams = z.object({ id: z.uuid() });
+export const objectionInput = z.object({
+	note: z.string().trim().max(500).nullable().default(null)
+});
+
+/** Drag & Drop: Termin in einen anderen Raum legen */
+export const placeInput = z.object({
+	roomId: z.uuid(),
+	/** `one` = nur dieser Termin, `following` = dieser und alle folgenden (Wunschraum der Serie) */
+	scope: z.enum(['one', 'following']).default('one'),
+	/** Feste Buchungen nur mit ausdrücklicher Bestätigung */
+	confirmFixed: z.boolean().default(false)
+});
+export type PlaceInput = z.infer<typeof placeInput>;
+
+/** Prüfung je Raum beim Ziehen */
+export interface DropTarget {
+	roomId: string;
+	ok: boolean;
+	/** Kurzer Grund, z. B. „Belegt 19:30–21:30“ oder „Passt genau (12 / 12)“ */
+	label: string;
+	/** Aktueller Raum des Termins */
+	current: boolean;
+}
+
+// --- Tauschanfragen ----------------------------------------------------------------------------
+
+export type SwapStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'withdrawn';
+
+export const SWAP_STATUS_LABELS: Record<SwapStatus, string> = {
+	pending: 'offen',
+	accepted: 'angenommen',
+	declined: 'abgelehnt',
+	expired: 'abgelaufen',
+	withdrawn: 'zurückgezogen'
+};
+
+/** Tage, die die angefragte Gruppe zum Antworten hat (höchstens bis zum Vortag des Termins) */
+export const SWAP_ANSWER_DAYS = 7;
+
+export interface SwapInfo {
+	id: string;
+	status: SwapStatus;
+	date: string;
+	startsAt: string;
+	endsAt: string;
+	/** Was die anfragende Gruppe vorhat */
+	requestTitle: string;
+	requestPersons: number;
+	requesterId: string;
+	requesterName: string | null;
+	/** Die feste Buchung, die weichen soll */
+	targetBookingId: string;
+	targetTitle: string;
+	targetOwnerId: string;
+	roomId: string;
+	roomName: string | null;
+	proposedRoomId: string | null;
+	proposedRoomName: string | null;
+	message: string | null;
+	dueOn: string;
+	createdAt: string;
+	/** Die aufrufende Person darf entscheiden (Eigentümer*in der festen Buchung oder Verwaltung) */
+	canDecide: boolean;
+	resultBookingId: string | null;
+}
+
+/** Mögliche Tauschpartner bei „kein Raum frei“ */
+export interface SwapOption {
+	date: string;
+	targetBookingId: string;
+	targetTitle: string;
+	roomId: string;
+	roomName: string;
+	proposedRoomId: string;
+	proposedRoomName: string;
+}
+
+export const swapRequestInput = z.object({
+	targetBookingId: z.uuid(),
+	date: dateString,
+	roomId: z.uuid(),
+	message: z.string().trim().max(500).nullable().default(null),
+	/** Die gewünschte Buchung (nur einmalig, ohne Wiederholung) */
+	booking: z.lazy(() => bookingInput)
+});
+export type SwapRequestInput = z.infer<typeof swapRequestInput>;
 
 // --- Planung -----------------------------------------------------------------------------------
 
@@ -320,6 +517,18 @@ export interface PlanConflict {
 	busyRoomIds: string[];
 }
 
+/** Raumvorschlag im Buchungsdialog (erster Termin) */
+export interface RoomCandidate {
+	roomId: string;
+	name: string;
+	capacity: number;
+	heatingLevel: number;
+	featureIds: string[];
+	/** `best` = zugewiesen, `ok` = passt und frei, `busy` = passt, aber belegt, `unsuitable` = passt nicht */
+	status: 'best' | 'ok' | 'busy' | 'unsuitable';
+	reason: string;
+}
+
 export interface AvailabilityResult {
 	ok: boolean;
 	/** Zugewiesener Raum je Datum (erste 60 Termine) */
@@ -329,6 +538,10 @@ export interface AvailabilityResult {
 	conflicts: PlanConflict[];
 	/** Termine außerhalb des Planungszeitraums (werden später geplant) */
 	beyondHorizon: number;
+	/** Räume für den ersten Termin mit Begründung */
+	candidates: RoomCandidate[];
+	/** Kein Raum frei: feste Buchungen, die tauschen könnten */
+	swapOptions: SwapOption[];
 }
 
 export interface PlanPreview {
@@ -336,7 +549,7 @@ export interface PlanPreview {
 	to: string;
 	moves: PlanMove[];
 	unassigned: PlanConflict[];
-	/** Geschätzte Heizkosten in Cent vorher/nachher */
+	/** Heizaufwand vorher/nachher (Stufe × Stunden × 100, abzüglich „schon warm“) */
 	costBefore: number;
 	costAfter: number;
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
-	// Raumverwaltung: Räume (Kapazität, Fläche, Heizkosten, Merkmale, Sperrzeiten), Merkmale und Gesamtoptimierung
+	// Raumverwaltung: Räume (Kapazität, Fläche, Heizaufwand 1–10, Merkmale, Sperrzeiten), Merkmale, Gruppen und
+	// Gesamtoptimierung
 	// mit Vorschau. Recht `rooms.room.manage`.
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -17,18 +18,20 @@
 	import * as Table from '$lib/components/ui/table';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { Slider } from '$lib/components/ui/slider';
+	import GroupsPanel from './GroupsPanel.svelte';
+	import HeatMeter from './HeatMeter.svelte';
 	import {
 		ConfirmDialog,
 		EmptyState,
 		ErrorState,
 		FormField,
 		LoadingState,
-		MoneyInput,
 		NumberStepper,
 		PageHeader
 	} from '$lib/components/layout';
 	import type { Feature, PlanPreview, Room, RoomBlock } from '../schemas';
-	import { dayLabel, errorInfo, euro, type RoomsMeta } from './helpers';
+	import { dayLabel, errorInfo, heatHours, type RoomsMeta } from './helpers';
 
 	let meta = $state<RoomsMeta | null>(null);
 	let loadError = $state('');
@@ -59,7 +62,7 @@
 	let rDescription = $state('');
 	let rCapacity = $state(20);
 	let rArea = $state('');
-	let rHeating = $state(0);
+	let rHeating = $state(5);
 	let rBookable = $state(true);
 	let rFeatures = $state<string[]>([]);
 	let rBusy = $state(false);
@@ -74,7 +77,7 @@
 		rDescription = room?.description ?? '';
 		rCapacity = room?.capacity ?? 20;
 		rArea = room?.areaM2 != null ? String(room.areaM2).replace('.', ',') : '';
-		rHeating = room?.heatingCostCentsPerHour ?? 0;
+		rHeating = room?.heatingLevel ?? 5;
 		rBookable = room?.bookable ?? true;
 		rFeatures = [...(room?.featureIds ?? [])];
 		rError = '';
@@ -108,7 +111,7 @@
 						description: rDescription.trim() || null,
 						capacity: rCapacity,
 						areaM2: area !== null && Number.isFinite(area) ? area : null,
-						heatingCostCentsPerHour: rHeating,
+						heatingLevel: rHeating,
 						bookable: rBookable,
 						featureIds: rFeatures
 					})
@@ -288,6 +291,7 @@
 		<Tabs.List>
 			<Tabs.Trigger value="rooms">Räume ({meta.rooms.length})</Tabs.Trigger>
 			<Tabs.Trigger value="features">Merkmale ({meta.features.length})</Tabs.Trigger>
+			<Tabs.Trigger value="groups">Gruppen ({meta.groups.length})</Tabs.Trigger>
 			<Tabs.Trigger value="plan">Optimierung</Tabs.Trigger>
 		</Tabs.List>
 
@@ -300,7 +304,7 @@
 			{#if !meta.rooms.length}
 				<EmptyState
 					title="Noch keine Räume"
-					description="Lege Räume mit Personenzahl, Heizkosten und Merkmalen an (z. B. Kirche, Gemeindesaal, Jugendraum)."
+					description="Lege Räume mit Personenzahl, Heizaufwand und Merkmalen an (z. B. Kirche, Gemeindesaal, Jugendraum)."
 				/>
 			{:else}
 				<div class="overflow-x-auto rounded-md border">
@@ -310,7 +314,7 @@
 								<Table.Head>Raum</Table.Head>
 								<Table.Head class="text-right">Plätze</Table.Head>
 								<Table.Head class="text-right">Fläche</Table.Head>
-								<Table.Head class="text-right">Heizkosten/h</Table.Head>
+								<Table.Head>Heizaufwand</Table.Head>
 								<Table.Head>Merkmale</Table.Head>
 								<Table.Head class="w-24"><span class="sr-only">Aktionen</span></Table.Head>
 							</Table.Row>
@@ -330,9 +334,14 @@
 									<Table.Cell class="text-right tabular-nums">
 										{room.areaM2 != null ? `${room.areaM2.toLocaleString('de-DE')} m²` : '–'}
 									</Table.Cell>
-									<Table.Cell class="text-right tabular-nums"
-										>{euro(room.heatingCostCentsPerHour)}</Table.Cell
-									>
+									<Table.Cell>
+										<span class="flex items-center gap-2">
+											<HeatMeter level={room.heatingLevel} />
+											<span class="text-xs tabular-nums text-muted-foreground"
+												>{room.heatingLevel}</span
+											>
+										</span>
+									</Table.Cell>
 									<Table.Cell>
 										<div class="flex flex-wrap gap-1">
 											{#each room.featureIds as f (f)}<Badge variant="secondary"
@@ -364,8 +373,8 @@
 					</Table.Root>
 				</div>
 				<p class="text-xs text-muted-foreground">
-					Die Heizkosten je Stunde bestimmen, welcher Raum bevorzugt wird. Ohne Angabe gewinnt der
-					Raum mit den wenigsten freien Plätzen.
+					Der Heizaufwand (1 = kaum, 10 = sehr hoch) bestimmt, welcher Raum bevorzugt wird; bei
+					gleicher Stufe gewinnt der Raum mit den wenigsten freien Plätzen.
 				</p>
 			{/if}
 		</Tabs.Content>
@@ -427,12 +436,16 @@
 			{/if}
 		</Tabs.Content>
 
+		<Tabs.Content value="groups" class="pt-4">
+			<GroupsPanel groups={meta.groups} onchanged={load} />
+		</Tabs.Content>
+
 		<Tabs.Content value="plan" class="space-y-4 pt-4">
 			<p class="max-w-prose text-sm text-muted-foreground">
-				Verteilt alle flexiblen Buchungen neu, sodass möglichst kleine bzw. günstig zu heizende
-				Räume belegt werden. Feste Buchungen und Termine in den nächsten {meta.lockDays} Tagen bleiben,
-				wo sie sind. Neue Buchungen werden ohnehin sofort optimal geplant; das hier lohnt sich nach Absagen
-				oder geänderten Räumen.
+				Verteilt alle flexiblen Buchungen neu, sodass möglichst kleine bzw. wenig aufwendig zu
+				heizende Räume belegt werden. Feste Buchungen und Termine in den nächsten {meta.lockDays} Tagen
+				bleiben, wo sie sind. Neue Buchungen werden ohnehin sofort optimal geplant; das hier lohnt sich
+				nach Absagen oder geänderten Räumen.
 			</p>
 			<div class="flex flex-wrap items-end gap-3">
 				<FormField label="Zeitraum ab heute" id="plan-days">
@@ -458,12 +471,12 @@
 			{#if plan}
 				<div class="space-y-3 rounded-md border p-3 text-sm">
 					<p>
-						{formatDateDe(plan.from)} – {formatDateDe(plan.to)}: Heizkosten
-						<span class="tabular-nums">{euro(plan.costBefore)}</span>
+						{formatDateDe(plan.from)} – {formatDateDe(plan.to)}: Heizaufwand
+						<span class="tabular-nums">{heatHours(plan.costBefore)}</span>
 						<ArrowRight class="inline size-3.5" aria-label="nach" />
-						<span class="font-medium tabular-nums">{euro(plan.costAfter)}</span>
+						<span class="font-medium tabular-nums">{heatHours(plan.costAfter)}</span>
 						{#if plan.costBefore > plan.costAfter}
-							<Badge class="ml-1">− {euro(plan.costBefore - plan.costAfter)}</Badge>
+							<Badge class="ml-1">− {heatHours(plan.costBefore - plan.costAfter)}</Badge>
 						{/if}
 					</p>
 					{#if planDone}
@@ -525,18 +538,28 @@
 				<FormField label="Fläche (m²)" id="room-area" error={rFields.areaM2}>
 					<Input id="room-area" bind:value={rArea} inputmode="decimal" placeholder="optional" />
 				</FormField>
-				<FormField
-					label="Heizkosten je Stunde"
-					id="room-heating"
-					error={rFields.heatingCostCentsPerHour}
-					hint="Schätzung genügt – dient dem Vergleich der Räume"
-				>
-					<MoneyInput id="room-heating" label="Heizkosten je Stunde" bind:cents={rHeating} />
-				</FormField>
 				<div class="flex items-center gap-2 self-end pb-2">
 					<Switch id="room-bookable" bind:checked={rBookable} />
 					<Label for="room-bookable">buchbar</Label>
 				</div>
+			</div>
+			<div class="space-y-2">
+				<div class="flex items-center justify-between gap-2">
+					<span class="text-sm font-medium" id="room-heating-label">Heizaufwand</span>
+					<Badge>{rHeating} von 10</Badge>
+				</div>
+				<Slider label="Heizaufwand von 1 bis 10" bind:value={rHeating} min={1} max={10} step={1} />
+				<div class="flex justify-between gap-3 text-xs text-muted-foreground">
+					<span>1 · kaum, schnell warm</span>
+					<span class="text-right">10 · sehr hoch, z. B. Kirchenschiff</span>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					Grobe Einschätzung genügt. Je niedriger die Stufe, desto lieber vergibt der Planer den
+					Raum.
+				</p>
+				{#if rFields.heatingLevel}<p class="text-sm text-destructive">
+						{rFields.heatingLevel}
+					</p>{/if}
 			</div>
 			<FormField label="Merkmale" id="room-features">
 				<MultiSelect

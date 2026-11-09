@@ -11,6 +11,9 @@
 import { sql } from 'drizzle-orm';
 import { addDays, core, inList, todayBerlin, type Tx } from '$lib/sdk/server';
 import {
+	autoMoveCounts,
+	groupPriorities,
+	insertMoves,
 	loadAssignments,
 	loadBlocks,
 	loadBookingsInWindow,
@@ -20,6 +23,10 @@ import {
 import { heatingCostOf, planDay, type PlanRoom, type PlanSlot } from './planner';
 import { expandDates } from './recurrence';
 import {
+	DEFAULT_PRIORITY,
+	HEAT_POINTS_PER_LEVEL,
+	MAX_AUTO_MOVES,
+	OBJECTION_HOURS,
 	SETTING,
 	SETTING_DEFAULTS,
 	toMinutes,
@@ -71,6 +78,10 @@ export interface PlanRequest {
 	overlay?: readonly BookingRow[];
 	/** Buchungen, die als gelöscht gelten (Probelauf) */
 	remove?: ReadonlySet<string>;
+	/** Anlass für das Verlegungsprotokoll, z. B. „Platz für „Kirchenchor““ */
+	reason?: string | null;
+	/** Wer die Änderung ausgelöst hat (Protokoll) */
+	actorId?: string | null;
 }
 
 export interface PlannedEntry {
@@ -135,6 +146,9 @@ export async function computePlan(tx: Tx, pc: PlanContext, req: PlanRequest): Pr
 	const subject = req.subjectIds ?? new Set<string>();
 
 	const blocks = await loadBlocks(tx, { from, to });
+	const priorities = await groupPriorities(tx);
+	// Fairness: wer in den letzten 30 Tagen schon oft automatisch verlegt wurde, bleibt, wo er ist
+	const moveCounts = await autoMoveCounts(tx, addDays(pc.today, -30));
 	const stored = await loadBookingsInWindow(tx, from, to);
 	const bookings = new Map(stored.map((b) => [b.id, b]));
 	for (const id of req.remove ?? []) bookings.delete(id);
@@ -167,7 +181,7 @@ export async function computePlan(tx: Tx, pc: PlanContext, req: PlanRequest): Pr
 			id: r.id,
 			capacity: r.capacity,
 			featureIds: r.featureIds,
-			heatingCentsPerHour: r.heatingCostCentsPerHour,
+			heatingCentsPerHour: r.heatingLevel * HEAT_POINTS_PER_LEVEL,
 			available:
 				r.bookable &&
 				!blocks.some((x) => x.roomId === r.id && x.startsOn <= date && x.endsOn >= date)
@@ -186,8 +200,14 @@ export async function computePlan(tx: Tx, pc: PlanContext, req: PlanRequest): Pr
 				end: toMinutes(b.endsAt),
 				persons: b.persons,
 				featureIds: b.featureIds,
-				fixedRoomId: b.mode === 'fixed' ? b.fixedRoomId : null,
-				locked: !isSubject && date < lockUntil && current !== null,
+				// von Hand gelegt (Drag & Drop) gilt für diesen Tag wie „fest“
+				fixedRoomId: b.pinned.get(date) ?? (b.mode === 'fixed' ? b.fixedRoomId : null),
+				wishRoomId: b.mode === 'similar' ? b.fixedRoomId : null,
+				moveWeight: b.groupId ? (priorities.get(b.groupId) ?? DEFAULT_PRIORITY) : DEFAULT_PRIORITY,
+				locked:
+					!isSubject &&
+					current !== null &&
+					(date < lockUntil || (moveCounts.get(b.id) ?? 0) >= MAX_AUTO_MOVES),
 				currentRoomId: current,
 				preferredRoomId: preferred.get(b.id) ?? null,
 				priority: isSubject ? 0 : 1
@@ -241,9 +261,34 @@ export async function computePlan(tx: Tx, pc: PlanContext, req: PlanRequest): Pr
 	return out;
 }
 
-/** Schreibt die Zuweisungen der geplanten Tage (ersetzt alle Zuweisungen dieser Tage). */
-export async function applyPlan(tx: Tx, outcome: PlanOutcome): Promise<void> {
+/**
+ * Schreibt die Zuweisungen der geplanten Tage (ersetzt alle Zuweisungen dieser Tage) und protokolliert automatische
+ * Verlegungen bestehender Termine (mit Widerspruchsfrist).
+ */
+export async function applyPlan(
+	tx: Tx,
+	outcome: PlanOutcome,
+	log: { reason?: string | null; actorId?: string | null } = {}
+): Promise<void> {
 	if (!outcome.dates.length) return;
+	const logged = outcome.moves.filter((m) => m.toRoomId !== null);
+	if (logged.length) {
+		await insertMoves(
+			tx,
+			logged.map((m) => ({
+				bookingId: m.bookingId,
+				date: m.date,
+				fromRoomId: m.fromRoomId,
+				toRoomId: m.toRoomId
+			})),
+			{
+				kind: 'auto',
+				reason: log.reason ?? null,
+				createdBy: log.actorId ?? null,
+				objectionHours: OBJECTION_HOURS
+			}
+		);
+	}
 	for (let i = 0; i < outcome.dates.length; i += 200) {
 		const chunk = outcome.dates.slice(i, i + 200);
 		await tx.execute(
@@ -268,6 +313,6 @@ export async function lockPlanning(tx: Tx): Promise<void> {
 /** Plant und schreibt; liefert das Ergebnis (für Benachrichtigungen nach dem Commit). */
 export async function replan(tx: Tx, pc: PlanContext, req: PlanRequest): Promise<PlanOutcome> {
 	const outcome = await computePlan(tx, pc, req);
-	await applyPlan(tx, outcome);
+	await applyPlan(tx, outcome, { reason: req.reason, actorId: req.actorId });
 	return outcome;
 }

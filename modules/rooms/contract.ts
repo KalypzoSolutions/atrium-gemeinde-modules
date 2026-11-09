@@ -27,8 +27,9 @@ export interface RoomOptions {
 
 /** Raum-Anforderung am Termin */
 export interface EventRoomRequest {
-	mode: 'fixed' | 'flexible';
-	/** Bei `fixed` Pflicht */
+	/** `fixed` = nur dieser Raum, `similar` = Raum wie dieser (Wunschraum), `flexible` = nach Anforderungen */
+	mode: 'fixed' | 'similar' | 'flexible';
+	/** Bei `fixed` und `similar` Pflicht */
 	roomId: string | null;
 	persons: number;
 	featureIds: string[];

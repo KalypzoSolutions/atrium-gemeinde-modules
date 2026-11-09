@@ -15,7 +15,6 @@ import {
 	type Tx
 } from '$lib/sdk/server';
 import {
-	availabilityOf,
 	noRoomError,
 	toWrite,
 	validateSpec,
@@ -23,6 +22,7 @@ import {
 	type BookingSpec
 } from './bookings.service';
 import type {
+	EventRoomAssignment,
 	EventRoomInfo,
 	EventRoomResult,
 	EventRoomSpec,
@@ -45,7 +45,8 @@ import {
 	lockPlanning,
 	plannedDates,
 	replan,
-	type PlanContext
+	type PlanContext,
+	type PlanOutcome
 } from './planning.service';
 import {
 	MODULE_ID,
@@ -54,6 +55,7 @@ import {
 	PERM_VIEW,
 	ROOMS_NO_ROOM,
 	bookingInput,
+	bookingMode,
 	recurrenceRule,
 	type PlanConflict
 } from './schemas';
@@ -149,14 +151,33 @@ function withCancelled(b: BookingRow, dates: readonly string[]): BookingRow {
 	return { ...b, cancelled: new Set(dates) };
 }
 
+/** Absagen aus dem Termin übernehmen (von Hand festgelegte Räume einzelner Termine bleiben) */
 async function replaceExceptions(tx: Tx, bookingId: string, dates: readonly string[]) {
-	await tx.execute(sql`DELETE FROM booking_exceptions WHERE booking_id = ${bookingId}`);
+	await tx.execute(
+		sql`DELETE FROM booking_exceptions WHERE booking_id = ${bookingId} AND pinned_room_id IS NULL`
+	);
+	await tx.execute(
+		sql`UPDATE booking_exceptions SET cancelled = FALSE WHERE booking_id = ${bookingId}`
+	);
 	for (const d of new Set(dates)) {
 		await tx.execute(
 			sql`INSERT INTO booking_exceptions (booking_id, occurrence_date, cancelled)
-				VALUES (${bookingId}, ${d}::date, TRUE)`
+				VALUES (${bookingId}, ${d}::date, TRUE)
+				ON CONFLICT (booking_id, occurrence_date) DO UPDATE SET cancelled = TRUE`
 		);
 	}
+}
+
+/** Zuweisungen der Buchung aus dem Planungsergebnis */
+function assignmentsOf(outcome: PlanOutcome, bookingId: string): EventRoomAssignment[] {
+	return outcome.entries
+		.filter((e) => e.bookingId === bookingId)
+		.slice(0, 60)
+		.map((e) => ({
+			date: e.date,
+			roomId: e.roomId,
+			roomName: e.roomId ? (outcome.roomNames.get(e.roomId) ?? null) : null
+		}));
 }
 
 export const roomsService = {
@@ -208,12 +229,11 @@ export const roomsService = {
 					subjectIds: new Set([id]),
 					overlay: [virtual]
 				});
-				const result = availabilityOf(outcome, id, 0);
-				if (!result.ok) throw noRoomError(result.conflicts);
+				if (outcome.subjectConflicts.length) throw noRoomError(outcome.subjectConflicts);
 				return {
 					ok: true as const,
 					bookingId: existing?.id ?? null,
-					assignments: result.assignments
+					assignments: assignmentsOf(outcome, id)
 				};
 			});
 		} catch (e) {
@@ -243,7 +263,9 @@ export const roomsService = {
 				const after = (await loadBookingByEvent(tx, eventId))!;
 				const outcome = await replan(tx, pc, {
 					dates: new Set([...(before ? plannedDates(before, pc) : []), ...plannedDates(after, pc)]),
-					subjectIds: new Set([id])
+					subjectIds: new Set([id]),
+					reason: `Platz für „${spec.title}“`,
+					actorId: ctx.userId
 				});
 				if (outcome.subjectConflicts.length) throw noRoomError(outcome.subjectConflicts);
 				return { id, created: !before, outcome };
@@ -254,8 +276,7 @@ export const roomsService = {
 				{ target: done.id, metadata: { source: 'events', moved: done.outcome.moves.length } }
 			);
 			await notifyPlanChanges(ctx, done.outcome);
-			const result = availabilityOf(done.outcome, done.id, 0);
-			return { ok: true, bookingId: done.id, assignments: result.assignments };
+			return { ok: true, bookingId: done.id, assignments: assignmentsOf(done.outcome, done.id) };
 		} catch (e) {
 			return asFailure(e);
 		}
@@ -314,7 +335,7 @@ export const roomsService = {
 					eventId: String(r.event_id),
 					bookingId,
 					request: {
-						mode: String(r.mode) === 'fixed' ? ('fixed' as const) : ('flexible' as const),
+						mode: bookingMode.safeParse(String(r.mode)).data ?? ('flexible' as const),
 						roomId: r.fixed_room_id == null ? null : String(r.fixed_room_id),
 						persons: Number(r.persons),
 						featureIds: features

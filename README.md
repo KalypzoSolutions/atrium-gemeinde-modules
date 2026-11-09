@@ -9,17 +9,22 @@ Alle Module liegen unter `modules/<id>/`, der Katalog unter `modules/atrium-modu
 
 ## Raumplanung (`rooms`) im Überblick
 
-- **Räume** mit Plätzen, Fläche, geschätzten Heizkosten je Stunde, Sperrzeiten und frei konfigurierbaren **Merkmalen**
-  (Klavier, Orgel, Beamer, ebenerdig, Küche …).
-- **Buchen**: entweder einen bestimmten Raum **fest** (eigenes Recht) oder nur **Anforderungen** angeben
-  (Personenzahl, Merkmale) – das System wählt den kleinsten bzw. am günstigsten zu heizenden passenden Raum.
-- **Automatisches Umplanen**: kommt eine neue Buchung dazu, wird ein Raum gesperrt oder frei, werden flexible Buchungen
-  neu verteilt (nie kurz vor dem Termin); Betroffene werden benachrichtigt. Neue Buchungen verdrängen nie bestehende.
-- **Heizkosten sparen**: kleine Räume bevorzugt, aufeinanderfolgende Termine im selben (schon warmen) Raum, Serien
-  bleiben möglichst jede Woche im selben Raum; Gesamtoptimierung mit Vorschau und Ersparnis in der Verwaltung.
+- **Räume** mit Plätzen, Fläche, **Heizaufwand 1–10** (Regler), Sperrzeiten und frei konfigurierbaren **Merkmalen**
+  (Klavier, Orgel, Beamer, ebenerdig, Küche …). **Gruppen** mit Farbe und Vorrang.
+- **Buchen in drei Schritten** (Was · Wann · Raum) mit drei Stufen: **Nur dieser Raum** (eigenes Recht),
+  **Raum wie dieser** (Wunschraum, sonst gleichwertig) oder **Nach Anforderungen** (Personen, Merkmale). Raumvorschläge
+  nennen den Grund („Passt genau“, „Belegt: Chorprobe 19:30–21:30“, „Fehlt: Klavier“).
+- **Automatisches Umplanen**: braucht eine andere Gruppe genau so einen Raum, ziehen flexible und „Raum wie dieser“-
+  Buchungen um (nie kurz vor dem Termin, höchstens zweimal im Monat). Die Gruppe wird benachrichtigt und kann
+  48 Stunden lang widersprechen. Feste Buchungen bekommen stattdessen eine **Tauschanfrage**.
+- **Drag & Drop fürs Büro**: Termine in andere Räume ziehen, solange die Anforderungen passen – passende Räume leuchten
+  grün, die anderen nennen den Grund. Mit Rückgängig.
+- **Heizaufwand sparen**: Räume mit niedriger Stufe zuerst, aufeinanderfolgende Termine im schon warmen Raum, Serien
+  jede Woche im selben Raum; Gesamtoptimierung mit Vorschau.
 - **Dauertermine**: wöchentlich (auch alle n Wochen, mehrere Wochentage), einzelne Termine absagbar.
-- **Kalender**: Buchungen lassen sich mit Terminen aus dem Modul `events` (atrium-basic-modules) verknüpfen;
-  `events` kann über den Dienst `RoomsService` Räume direkt am Termin buchen (`modules/rooms/contract.ts`).
+- **Belegungsplan**: Woche (Räume × Tage) in Gruppenfarben, Tag (Räume × Uhrzeit), „Meine Buchungen“; auf dem Handy als Liste.
+- **Kalender**: Verknüpfung mit Terminen aus `events` (atrium-basic-modules); `events` bucht über `RoomsService`
+  Räume direkt am Termin (`modules/rooms/contract.ts`).
 
 ## Installation auf einem Server
 

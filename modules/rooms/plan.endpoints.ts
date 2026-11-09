@@ -11,9 +11,10 @@ import {
 	moduleDb,
 	type RequestContext
 } from '$lib/sdk/server';
-import { loadFeatures, loadRooms } from './data';
+import { loadFeatures, loadGroups, loadRooms } from './data';
+import { expireSwaps } from './swaps.service';
 import { eventsService } from './events-link';
-import { notifyPlanChanges } from './notify';
+import { notifyPlanChanges, notifySwap } from './notify';
 import {
 	allPlanDates,
 	computePlan,
@@ -74,7 +75,8 @@ export const planEndpoints: AnyApiEndpoint[] = [
 			const eventsAvailable = (await eventsService()) !== null;
 			const data = await moduleDb(MODULE_ID).transaction(async (tx) => ({
 				features: await loadFeatures(tx),
-				rooms: await loadRooms(tx)
+				rooms: await loadRooms(tx),
+				groups: await loadGroups(tx)
 			}));
 			return {
 				...data,
@@ -123,6 +125,8 @@ export const replanJob: ModuleJob = {
 			return replan(tx, pc, { dates: allPlanDates(pc) });
 		});
 		await notifyPlanChanges(ctx, outcome);
-		return `${outcome.entries.length} Termine geplant, ${outcome.moves.length} verlegt, ${outcome.unassigned.length} ohne Raum`;
+		const expired = await moduleDb(MODULE_ID).transaction((tx) => expireSwaps(tx, ctx, pc.today));
+		for (const s of expired) await notifySwap(ctx, s, 'expired');
+		return `${expired.length} Tauschanfragen abgelaufen, ${outcome.entries.length} Termine geplant, ${outcome.moves.length} verlegt, ${outcome.unassigned.length} ohne Raum`;
 	}
 };
