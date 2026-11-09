@@ -1,0 +1,19 @@
+{
+	"name": "atrium-gemeinde-modules",
+	"private": true,
+	"version": "1.0.0",
+	"description": "Gemeindemodule für Kalypzo Atrium: Raumplanung (Core als Submodul .core)",
+	"type": "module",
+	"scripts": {
+		"setup": "node scripts/setup.mjs",
+		"check": "node scripts/core.mjs check",
+		"test": "node scripts/core.mjs test",
+		"build": "node scripts/core.mjs build",
+		"lint": "node scripts/core.mjs lint",
+		"format:check": "node scripts/core.mjs format",
+		"e2e": "node scripts/core.mjs e2e",
+		"demo": "node scripts/core.mjs demo",
+		"check:catalog": "node scripts/check-catalog.mjs",
+		"check:migrations": "node scripts/check-migrations.mjs"
+	}
+}

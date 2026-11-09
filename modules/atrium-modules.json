@@ -1,0 +1,6 @@
+{
+	"schema": 1,
+	"name": "Atrium – Gemeindemodule",
+	"description": "Module für Kirchengemeinden (Kalypzo Atrium)",
+	"modules": [{ "id": "rooms", "path": "rooms" }]
+}

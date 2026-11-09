@@ -1,0 +1,25 @@
+{
+	"schema": 1,
+	"id": "rooms",
+	"name": "Räume",
+	"description": "Raumplanung für Gemeinden: Räume mit Merkmalen, feste und flexible Buchungen, wöchentliche Dauertermine und automatische Zuweisung des kleinsten passenden Raums (spart Heizkosten).",
+	"version": "1.0.0",
+	"core": ">=2.0.0-0 <3.0.0",
+	"dependencies": {},
+	"optionalDependencies": {
+		"events": {
+			"version": "^1.5.0",
+			"source": "github:KalypzoSolutions/atrium-basic-modules/modules/events"
+		}
+	},
+	"permissions": [
+		"rooms.booking.view",
+		"rooms.booking.create",
+		"rooms.booking.fix",
+		"rooms.booking.edit-all",
+		"rooms.room.manage",
+		"rooms.settings.manage"
+	],
+	"npm": {},
+	"repository": "github:KalypzoSolutions/atrium-gemeinde-modules"
+}
