@@ -16,29 +16,28 @@ import {
 	defineEndpoint,
 	errors,
 	moduleDb,
-	rowsOf,
-	type RequestContext
+	type RequestContext,
+	rowsOf
 } from '$lib/sdk/server';
 import {
 	availabilityOf,
+	type BookingSpec,
 	buildDetail,
 	countBeyondHorizon,
 	finishDetail,
 	listOccurrences,
 	noRoomError,
-	swapOptionsFor,
 	requireEditable,
 	requireFixPermission,
+	swapOptionsFor,
 	toWrite,
 	validateSpec,
 	virtualBooking,
-	withOwnerNames,
-	type BookingSpec
+	withOwnerNames
 } from './bookings.service';
 import { insertBooking, loadBooking, updateBooking } from './data';
 import { eventTitle, eventVisible, searchEvents } from './events-link';
 import { notifyPlanChanges } from './notify';
-import { isOccurrence } from './recurrence';
 import {
 	computePlan,
 	loadPlanContext,
@@ -46,17 +45,18 @@ import {
 	plannedDates,
 	replan
 } from './planning.service';
+import { isOccurrence } from './recurrence';
 import {
-	MAX_WINDOW_DAYS,
-	MODULE_ID,
-	PERM_CREATE,
-	PERM_VIEW,
 	availabilityInput,
 	bookingInput,
 	idParams,
+	MAX_WINDOW_DAYS,
+	MODULE_ID,
 	myQuery,
 	occurrenceParams,
-	occurrencesQuery
+	occurrencesQuery,
+	PERM_CREATE,
+	PERM_VIEW
 } from './schemas';
 
 const tags = ['Modul: rooms'];

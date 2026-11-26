@@ -1,5 +1,5 @@
 // Demo-Daten für das Modul `rooms` (über die echte API, idempotent über Namen/Titel).
-// Voraussetzung: Demo-Server läuft (`npm run demo`, http://127.0.0.1:4300).
+// Voraussetzung: Demo-Server läuft (`bun run demo`, http://127.0.0.1:4300).
 // Aktiviert das Modul und legt typische Räume einer Kirchengemeinde mit Merkmalen sowie einige feste und
 // flexible Buchungen (auch wöchentliche Dauertermine) an.
 

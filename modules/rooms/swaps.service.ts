@@ -10,26 +10,26 @@ import {
 	addDays,
 	core,
 	errors,
-	rowsOf,
-	toIsoOrNull,
-	userLabel,
 	type RequestContext,
 	type Row,
-	type Tx
+	rowsOf,
+	type Tx,
+	toIsoOrNull,
+	userLabel
 } from '$lib/sdk/server';
-import { toWrite, validateSpec, type BookingSpec } from './bookings.service';
+import { type BookingSpec, toWrite, validateSpec } from './bookings.service';
 import { insertBooking, insertMoves, loadAssignments, loadBooking, pinOccurrence } from './data';
+import { bestTarget, dropTargets } from './placement.service';
 import { overlaps } from './planner';
-import { replan, type PlanContext, type PlanOutcome } from './planning.service';
+import { type PlanContext, type PlanOutcome, replan } from './planning.service';
 import {
 	PERM_MANAGE,
 	SWAP_ANSWER_DAYS,
-	toMinutes,
 	type SwapInfo,
 	type SwapRequestInput,
-	type SwapStatus
+	type SwapStatus,
+	toMinutes
 } from './schemas';
-import { bestTarget, dropTargets } from './placement.service';
 
 const text = (v: unknown): string | null => (v == null || v === '' ? null : String(v));
 
@@ -119,7 +119,7 @@ export async function createSwap(
 	if (spec.startsOn !== input.date) throw errors.badRequest('Datum passt nicht zur Buchung');
 	await validateSpec(tx, pc, { ...spec, mode: 'flexible', roomId: null }, { isNew: true });
 	const target = await loadBooking(tx, input.targetBookingId);
-	if (!target || target.mode !== 'fixed' || target.cancelled.has(input.date)) {
+	if (target?.mode !== 'fixed' || target.cancelled.has(input.date)) {
 		throw errors.notFound('Feste Buchung nicht gefunden');
 	}
 	if (target.ownerId === ctx.userId) throw errors.badRequest('Das ist deine eigene Buchung');

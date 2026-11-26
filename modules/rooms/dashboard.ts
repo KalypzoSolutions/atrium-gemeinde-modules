@@ -2,7 +2,7 @@
  * Übersicht: eigene Raumbuchungen in „Diese Woche“ (Art `room`) und für die Raumverwaltung Termine ohne Raum
  * in „Zu erledigen“.
  */
-import { addDays, formatDateDe, moduleDb, type ModuleDashboardSources } from '$lib/sdk/server';
+import { addDays, formatDateDe, type ModuleDashboardSources, moduleDb } from '$lib/sdk/server';
 import type { DashboardAgendaItem, DashboardTodo } from '$lib/sdk/types/dashboard';
 import { listOccurrences } from './bookings.service';
 import { canManage, loadMovesFor } from './moves.service';
@@ -22,17 +22,19 @@ export const roomsDashboard: ModuleDashboardSources = {
 			);
 			return items
 				.filter((o) => !o.managedByEvent)
-				.map((o): DashboardAgendaItem => ({
-					id: `rooms:${o.key}`,
-					kind: 'room',
-					title: o.title,
-					date: o.date,
-					endDate: null,
-					startTime: o.startsAt,
-					endTime: o.endsAt,
-					detail: o.roomName ?? (o.planned ? 'Ohne Raum' : 'Raum folgt'),
-					href: href(o.bookingId, o.date)
-				}));
+				.map(
+					(o): DashboardAgendaItem => ({
+						id: `rooms:${o.key}`,
+						kind: 'room',
+						title: o.title,
+						date: o.date,
+						endDate: null,
+						startTime: o.startsAt,
+						endTime: o.endsAt,
+						detail: o.roomName ?? (o.planned ? 'Ohne Raum' : 'Raum folgt'),
+						href: href(o.bookingId, o.date)
+					})
+				);
 		}
 	},
 	todos: {

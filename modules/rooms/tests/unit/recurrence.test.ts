@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import {
 	describeRecurrence,
 	expandDates,
@@ -6,7 +6,7 @@ import {
 	isoWeekday,
 	lastOccurrence
 } from '$modules/rooms/recurrence';
-import { recurrenceRule, type RecurrenceRule } from '$modules/rooms/schemas';
+import { type RecurrenceRule, recurrenceRule } from '$modules/rooms/schemas';
 
 const rule = (r: Partial<RecurrenceRule> = {}): RecurrenceRule =>
 	recurrenceRule.parse({ freq: 'weekly', ...r });

@@ -1,4 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { setTodayForTests } from '$lib/sdk/dates';
+import type { RequestContext } from '$lib/sdk/types';
+import roomsModule from '$modules/rooms/module';
+import { roomsService } from '$modules/rooms/refs.service';
+import type {
+	AvailabilityResult,
+	BookingDetail,
+	Feature,
+	Occurrence,
+	PlanPreview,
+	Room
+} from '$modules/rooms/schemas';
 import {
 	adminContext,
 	apiCall,
@@ -16,18 +28,6 @@ import {
 	syncModules,
 	useTestDatabase
 } from '$testing';
-import { setTodayForTests } from '$lib/sdk/dates';
-import type { RequestContext } from '$lib/sdk/types';
-import roomsModule from '$modules/rooms/module';
-import { roomsService } from '$modules/rooms/refs.service';
-import type {
-	AvailabilityResult,
-	BookingDetail,
-	Feature,
-	Occurrence,
-	PlanPreview,
-	Room
-} from '$modules/rooms/schemas';
 
 const B = '/modules/rooms';
 /** Montag; Termine ab Do (12.11.) sind nicht gesperrt (lockDays 3) */
@@ -432,7 +432,7 @@ describe('Räume: Lebenszyklus', () => {
 		);
 		await deleteUser(admin, memberId);
 		const after = await ok<BookingDetail>('admin', 'GET', `/bookings/${d.id}`);
-		expect(after.ownerId).toBe(admin.userId);
+		expect<unknown>(after.ownerId).toBe(admin.userId);
 	});
 
 	it('Einstellungen wirken (Planungszeitraum)', async () => {

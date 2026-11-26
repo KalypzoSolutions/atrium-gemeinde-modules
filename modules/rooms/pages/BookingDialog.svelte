@@ -1,19 +1,25 @@
 <script lang="ts">
-	// Raum buchen in drei Schritten (Was · Wann · Raum). Oben fasst ein Satz die Buchung zusammen. Im dritten Schritt
-	// wird die Stufe gewählt (Nach Anforderungen · Raum wie dieser · Nur dieser) und Raumvorschläge mit Begründung
-	// angezeigt (`POST /availability`). Bestehende Buchungen: alle Schritte frei wählbar, dazu nächste Termine,
-	// Verlegungen mit Widerspruch und für die Raumverwaltung „Verschieben nach …“.
-	import { page } from '$app/state';
-	import { untrack } from 'svelte';
+	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import Check from '@lucide/svelte/icons/check';
 	import Leaf from '@lucide/svelte/icons/leaf';
 	import MoveRight from '@lucide/svelte/icons/move-right';
 	import Repeat from '@lucide/svelte/icons/repeat';
-	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import { apiFetch, can } from '$lib/sdk/client';
-	import { formatDateDe } from '$lib/sdk/dates';
+	import { untrack } from 'svelte';
+	// Raum buchen in drei Schritten (Was · Wann · Raum). Oben fasst ein Satz die Buchung zusammen. Im dritten Schritt
+	// wird die Stufe gewählt (Nach Anforderungen · Raum wie dieser · Nur dieser) und Raumvorschläge mit Begründung
+	// angezeigt (`POST /availability`). Bestehende Buchungen: alle Schritte frei wählbar, dazu nächste Termine,
+	// Verlegungen mit Widerspruch und für die Raumverwaltung „Verschieben nach …“.
+	import { page } from '$app/state';
+	import {
+		ConfirmDialog,
+		ErrorState,
+		FormField,
+		LoadingState,
+		NumberStepper,
+		toastWithUndo
+	} from '$lib/components/layout';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -23,39 +29,33 @@
 	import { MultiSelect } from '$lib/components/ui/multi-select';
 	import { SelectField } from '$lib/components/ui/select-field';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { apiFetch, can } from '$lib/sdk/client';
+	import { formatDateDe } from '$lib/sdk/dates';
+	import { describeRecurrence } from '../recurrence';
 	import {
-		ConfirmDialog,
-		ErrorState,
-		FormField,
-		LoadingState,
-		NumberStepper,
-		toastWithUndo
-	} from '$lib/components/layout';
-	import {
+		type AvailabilityResult,
 		BOOKING_MODE_HINTS,
 		BOOKING_MODE_LABELS,
-		PERM_CREATE,
-		PERM_FIX,
-		PERM_MANAGE,
-		needsRoom,
-		type AvailabilityResult,
 		type BookingDetail,
 		type BookingMode,
 		type DropTarget,
+		needsRoom,
+		PERM_CREATE,
+		PERM_FIX,
+		PERM_MANAGE,
 		type PlanConflict,
 		type RecurrenceRule,
 		type RoomCandidate,
 		type SwapOption
 	} from '../schemas';
-	import { describeRecurrence } from '../recurrence';
 	import HeatMeter from './HeatMeter.svelte';
 	import {
-		WEEKDAY_SHORT,
 		dayLabel,
 		errorInfo,
+		type RoomsMeta,
+		WEEKDAY_SHORT,
 		weekdayIndex,
-		weekdayLong,
-		type RoomsMeta
+		weekdayLong
 	} from './helpers';
 
 	let {
@@ -574,11 +574,17 @@
 											done && i !== step && 'border-primary bg-primary text-primary-foreground'
 										]}
 									>
-										{#if done && i !== step}<Check class="size-3.5" />{:else}{i + 1}{/if}
+										{#if done && i !== step}
+											<Check class="size-3.5" />
+										{:else}
+											{i + 1}
+										{/if}
 									</span>
 									{label}
 								</button>
-								{#if i < STEPS.length - 1}<span class="h-px flex-1 bg-border"></span>{/if}
+								{#if i < STEPS.length - 1}
+									<span class="h-px flex-1 bg-border"></span>
+								{/if}
 							</li>
 						{/each}
 					</ol>
@@ -586,14 +592,19 @@
 
 				<p class="rounded-md bg-muted px-3 py-2.5 text-[15px] leading-relaxed">
 					<span class="rounded border bg-background px-1.5 font-semibold">{sentence.who}</span>
-					{#if sentence.what}<span class="text-muted-foreground"> · {sentence.what}</span>{/if}
+					{#if sentence.what}
+						<span class="text-muted-foreground"> · {sentence.what}</span>
+					{/if}
 					{#if sentence.when}
 						<span class="rounded border bg-background px-1.5 font-semibold">{sentence.when}</span>
 					{/if}
 					von <span class="rounded border bg-background px-1.5 font-semibold">{sentence.time}</span>
 					mit
-					<span class="rounded border bg-background px-1.5 font-semibold">{persons} Personen</span
-					>{#if sentence.needs}{sentence.needs}{/if}.
+					<span class="rounded border bg-background px-1.5 font-semibold"
+						>{persons} Personen</span
+					>{#if sentence.needs}
+						{sentence.needs}
+					{/if}.
 				</p>
 
 				<fieldset disabled={!editable || busy} class="min-w-0 space-y-4">
@@ -662,7 +673,8 @@
 											type="button"
 											size="sm"
 											variant="ghost"
-											onclick={() => ((eventId = null), (eventTitle = null))}>Lösen</Button
+											onclick={() => ((eventId = null), (eventTitle = null))}
+											>Lösen</Button
 										>
 									</div>
 								{:else}
@@ -685,7 +697,8 @@
 														}}
 													>
 														{hit.title}
-														<span class="text-muted-foreground">· {formatDateDe(hit.startsOn)}</span
+														<span class="text-muted-foreground"
+															>· {formatDateDe(hit.startsOn)}</span
 														>
 													</button>
 												</li>
@@ -813,13 +826,15 @@
 						<div class="space-y-2">
 							<span class="text-sm font-semibold">
 								{mode === 'flexible' ? 'Raumvorschlag' : mode === 'similar' ? 'Wunschraum' : 'Raum'}
-								{#if previewBusy}<span class="font-normal text-muted-foreground">
-										· prüft …</span
-									>{/if}
+								{#if previewBusy}
+									<span class="font-normal text-muted-foreground"> · prüft …</span>
+								{/if}
 							</span>
-							{#if fieldErrors.roomId}<p class="text-sm text-destructive">
+							{#if fieldErrors.roomId}
+								<p class="text-sm text-destructive">
 									{fieldErrors.roomId}
-								</p>{/if}
+								</p>
+							{/if}
 							<ul class="grid gap-2">
 								{#each candidates as c (c.roomId)}
 									<li>
@@ -837,8 +852,12 @@
 										>
 											<span class="flex items-center gap-2 font-semibold">
 												{c.name}
-												{#if c.status === 'best'}<Badge>Empfohlen</Badge>{/if}
-												{#if c.status === 'busy'}<Badge variant="outline">belegt</Badge>{/if}
+												{#if c.status === 'best'}
+													<Badge>Empfohlen</Badge>
+												{/if}
+												{#if c.status === 'busy'}
+													<Badge variant="outline">belegt</Badge>
+												{/if}
 											</span>
 											<span class="w-28"><HeatMeter level={c.heatingLevel} /></span>
 											<span class="text-sm text-muted-foreground">
@@ -855,7 +874,9 @@
 													c.status === 'best' ? 'text-success' : 'text-muted-foreground'
 												]}
 											>
-												{#if c.status === 'best'}<Leaf class="size-3.5" aria-hidden="true" />{/if}
+												{#if c.status === 'best'}
+													<Leaf class="size-3.5" aria-hidden="true" />
+												{/if}
 												{c.reason}
 											</span>
 										</button>
@@ -870,8 +891,9 @@
 								<p class="text-xs text-muted-foreground">
 									Ihr bleibt in {roomName(roomId)}, solange niemand anderes diesen Raum braucht.
 									Sonst zieht ihr in einen gleichwertigen Raum um und bekommt Bescheid.
-									{#if autoRoom}Wunschraum automatisch gewählt – zum Ändern einen anderen Raum
-										antippen.{/if}
+									{#if autoRoom}
+										Wunschraum automatisch gewählt – zum Ändern einen anderen Raum antippen.
+									{/if}
 								</p>
 							{/if}
 						</div>
@@ -899,7 +921,8 @@
 											{[...new Set(preview.moves.map((m) => `„${m.title}“`))]
 												.slice(0, 3)
 												.join(', ')}
-											in einen anderen Raum um. Die Gruppen werden benachrichtigt und können widersprechen.
+											in einen anderen Raum um. Die Gruppen werden benachrichtigt und können
+											widersprechen.
 										</p>
 									</div>
 								{/if}
@@ -936,7 +959,9 @@
 							</ul>
 						{/if}
 					</div>
-					{#if swapOptions.length}{@render swaps(swapOptions)}{/if}
+					{#if swapOptions.length}
+						{@render swaps(swapOptions)}
+					{/if}
 				{/if}
 				{#if swapSent}
 					<p
@@ -993,7 +1018,8 @@
 													type="button"
 													size="sm"
 													variant="ghost"
-													onclick={() => (objecting = null)}>Abbrechen</Button
+													onclick={() => (objecting = null)}
+													>Abbrechen</Button
 												>
 											</div>
 										{/if}

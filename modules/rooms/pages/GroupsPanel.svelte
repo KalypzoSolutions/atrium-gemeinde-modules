@@ -3,13 +3,13 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash-2';
-	import { apiFetch } from '$lib/sdk/client';
+	import { ConfirmDialog, EmptyState, FormField } from '$lib/components/layout';
 	import { Button } from '$lib/components/ui/button';
 	import { ColorPicker } from '$lib/components/ui/color-picker';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { SelectField } from '$lib/components/ui/select-field';
-	import { ConfirmDialog, EmptyState, FormField } from '$lib/components/layout';
+	import { apiFetch } from '$lib/sdk/client';
 	import { GROUP_PRIORITIES, GROUP_PRIORITY_LABELS, type Group } from '../schemas';
 	import { errorInfo, groupColor } from './helpers';
 
@@ -121,7 +121,9 @@
 			description="Zum Beispiel Gottesdienst, Kirchenchor, Konfirmanden, Seniorenkreis, Kita."
 		/>
 	{/if}
-	{#if error && !open}<p class="text-sm text-destructive" role="alert">{error}</p>{/if}
+	{#if error && !open}
+		<p class="text-sm text-destructive" role="alert">{error}</p>
+	{/if}
 </div>
 
 <Dialog.Root bind:open>
@@ -146,7 +148,9 @@
 					onchange={(v) => (priority = v ?? '3')}
 				/>
 			</FormField>
-			{#if error}<p class="text-sm text-destructive" role="alert">{error}</p>{/if}
+			{#if error}
+				<p class="text-sm text-destructive" role="alert">{error}</p>
+			{/if}
 		</form>
 		<Dialog.Footer>
 			<Button type="button" variant="outline" onclick={() => (open = false)}>Abbrechen</Button>

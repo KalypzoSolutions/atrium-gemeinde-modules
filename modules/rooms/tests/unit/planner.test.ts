@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import {
+	type PlanRoom,
+	type PlanSlot,
+	type PlanWeights,
 	planDay,
 	REASON_BUSY,
 	REASON_FIXED_UNAVAILABLE,
-	REASON_NO_MATCH,
-	type PlanRoom,
-	type PlanSlot,
-	type PlanWeights
+	REASON_NO_MATCH
 } from '$modules/rooms/planner';
 
 const W: PlanWeights = {

@@ -127,11 +127,11 @@ export function candidatesFor(
 ): PlanRoom[] {
 	if (slot.fixedRoomId) {
 		const r = rooms.find((x) => x.id === slot.fixedRoomId);
-		return r && r.available ? [r] : [];
+		return r?.available ? [r] : [];
 	}
 	if (slot.locked && slot.currentRoomId) {
 		const r = rooms.find((x) => x.id === slot.currentRoomId);
-		if (r && r.available) return [r];
+		if (r?.available) return [r];
 	}
 	return rooms
 		.filter((r) => roomMatches(r, slot))

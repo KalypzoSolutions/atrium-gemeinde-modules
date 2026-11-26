@@ -12,8 +12,8 @@ import {
 	isUniqueViolation,
 	moduleDb,
 	num,
-	rowsOf,
 	type RequestContext,
+	rowsOf,
 	type Tx
 } from '$lib/sdk/server';
 import { existingFeatureIds, loadBlocks, loadFeatures, loadRoom, loadRooms } from './data';
@@ -22,20 +22,20 @@ import {
 	allPlanDates,
 	loadPlanContext,
 	lockPlanning,
-	replan,
 	type PlanContext,
-	type PlanOutcome
+	type PlanOutcome,
+	replan
 } from './planning.service';
 import {
-	MODULE_ID,
-	PERM_MANAGE,
-	PERM_VIEW,
 	blockInput,
 	blockParams,
 	featureInput,
 	idParams,
-	roomInput,
-	type RoomInput
+	MODULE_ID,
+	PERM_MANAGE,
+	PERM_VIEW,
+	type RoomInput,
+	roomInput
 } from './schemas';
 
 const tags = ['Modul: rooms'];

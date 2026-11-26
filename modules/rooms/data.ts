@@ -2,18 +2,18 @@
  * Datenbank-Zugriffe des Moduls (nur innerhalb von `moduleDb(MODULE_ID).transaction`, keine Core-Dienste).
  */
 import { sql } from 'drizzle-orm';
-import { inList, num, rowsOf, type Row, type Tx } from '$lib/sdk/server';
+import { inList, num, type Row, rowsOf, type Tx } from '$lib/sdk/server';
 import {
+	type BookingMode,
 	bookingMode,
 	DEFAULT_PRIORITY,
-	recurrenceRule,
-	type BookingMode,
 	type Feature,
 	type Group,
 	type MoveKind,
 	type RecurrenceRule,
 	type Room,
-	type RoomBlock
+	type RoomBlock,
+	recurrenceRule
 } from './schemas';
 
 export interface BookingRow {

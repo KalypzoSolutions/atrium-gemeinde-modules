@@ -1,6 +1,7 @@
 /** Upgrade 0001 → 0002: Heizkosten in Cent werden zum Heizaufwand 1–10 (2,50 € je Stufe), Bestand bleibt gültig. */
-import { beforeAll, expect, it } from 'vitest';
+import { beforeAll, expect, it } from 'bun:test';
 import { sql } from 'drizzle-orm';
+import roomsModule from '$modules/rooms/module';
 import {
 	migrateModuleRest,
 	migrateModuleTo,
@@ -9,7 +10,6 @@ import {
 	syncModules,
 	useTestDatabase
 } from '$testing';
-import roomsModule from '$modules/rooms/module';
 
 beforeAll(async () => {
 	await useTestDatabase();

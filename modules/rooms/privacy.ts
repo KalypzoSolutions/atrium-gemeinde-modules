@@ -10,8 +10,8 @@ import { sql } from 'drizzle-orm';
 import {
 	type DataSubject,
 	type ModuleDefinition,
-	moduleDb,
 	type ModuleSubjectExport,
+	moduleDb,
 	type ResetArea,
 	rowsOf,
 	toIsoOrNull

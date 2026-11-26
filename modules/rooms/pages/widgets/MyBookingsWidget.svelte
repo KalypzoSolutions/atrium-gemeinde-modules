@@ -1,10 +1,10 @@
 <script lang="ts">
+	import House from '@lucide/svelte/icons/house';
 	// Dashboard-Kachel „Meine Raumbuchungen“: die nächsten fünf eigenen Termine mit Raum.
 	import { onMount } from 'svelte';
-	import House from '@lucide/svelte/icons/house';
+	import { DashboardCard } from '$lib/components/layout';
 	import { apiFetch } from '$lib/sdk/client';
 	import type { DashboardWidgetProps } from '$lib/sdk/types/module-ui';
-	import { DashboardCard } from '$lib/components/layout';
 	import type { Occurrence } from '../../schemas';
 	import { dayLabel, errorInfo } from '../helpers';
 

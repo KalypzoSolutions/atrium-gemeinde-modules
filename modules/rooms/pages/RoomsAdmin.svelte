@@ -1,26 +1,11 @@
 <script lang="ts">
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	// Raumverwaltung: Räume (Kapazität, Fläche, Heizaufwand 1–10, Merkmale, Sperrzeiten), Merkmale, Gruppen und
 	// Gesamtoptimierung
 	// mit Vorschau. Recht `rooms.room.manage`.
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash-2';
-	import ArrowRight from '@lucide/svelte/icons/arrow-right';
-	import { apiFetch } from '$lib/sdk/client';
-	import { formatDateDe } from '$lib/sdk/dates';
-	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { MultiSelect } from '$lib/components/ui/multi-select';
-	import { Switch } from '$lib/components/ui/switch';
-	import * as Table from '$lib/components/ui/table';
-	import * as Tabs from '$lib/components/ui/tabs';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import { Slider } from '$lib/components/ui/slider';
-	import GroupsPanel from './GroupsPanel.svelte';
-	import HeatMeter from './HeatMeter.svelte';
 	import {
 		ConfirmDialog,
 		EmptyState,
@@ -30,7 +15,22 @@
 		NumberStepper,
 		PageHeader
 	} from '$lib/components/layout';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import { MultiSelect } from '$lib/components/ui/multi-select';
+	import { Slider } from '$lib/components/ui/slider';
+	import { Switch } from '$lib/components/ui/switch';
+	import * as Table from '$lib/components/ui/table';
+	import * as Tabs from '$lib/components/ui/tabs';
+	import { Textarea } from '$lib/components/ui/textarea';
+	import { apiFetch } from '$lib/sdk/client';
+	import { formatDateDe } from '$lib/sdk/dates';
 	import type { Feature, PlanPreview, Room, RoomBlock } from '../schemas';
+	import GroupsPanel from './GroupsPanel.svelte';
+	import HeatMeter from './HeatMeter.svelte';
 	import { dayLabel, errorInfo, heatHours, type RoomsMeta } from './helpers';
 
 	let meta = $state<RoomsMeta | null>(null);
@@ -344,9 +344,9 @@
 									</Table.Cell>
 									<Table.Cell>
 										<div class="flex flex-wrap gap-1">
-											{#each room.featureIds as f (f)}<Badge variant="secondary"
-													>{featureName(f)}</Badge
-												>{/each}
+											{#each room.featureIds as f (f)}
+												<Badge variant="secondary">{featureName(f)}</Badge>
+											{/each}
 										</div>
 									</Table.Cell>
 									<Table.Cell class="text-right">
@@ -392,7 +392,9 @@
 				</FormField>
 				<Button type="submit" disabled={!fName.trim()}>Hinzufügen</Button>
 			</form>
-			{#if fError}<p class="text-sm text-destructive" role="alert">{fError}</p>{/if}
+			{#if fError}
+				<p class="text-sm text-destructive" role="alert">{fError}</p>
+			{/if}
 			{#if meta.features.length}
 				<ul class="divide-y rounded-md border">
 					{#each meta.features as f (f.id)}
@@ -443,9 +445,9 @@
 		<Tabs.Content value="plan" class="space-y-4 pt-4">
 			<p class="max-w-prose text-sm text-muted-foreground">
 				Verteilt alle flexiblen Buchungen neu, sodass möglichst kleine bzw. wenig aufwendig zu
-				heizende Räume belegt werden. Feste Buchungen und Termine in den nächsten {meta.lockDays} Tagen
-				bleiben, wo sie sind. Neue Buchungen werden ohnehin sofort optimal geplant; das hier lohnt sich
-				nach Absagen oder geänderten Räumen.
+				heizende Räume belegt werden. Feste Buchungen und Termine in den nächsten
+				{meta.lockDays} Tagen bleiben, wo sie sind. Neue Buchungen werden ohnehin sofort optimal
+				geplant; das hier lohnt sich nach Absagen oder geänderten Räumen.
 			</p>
 			<div class="flex flex-wrap items-end gap-3">
 				<FormField label="Zeitraum ab heute" id="plan-days">
@@ -467,7 +469,9 @@
 					</Button>
 				{/if}
 			</div>
-			{#if planError}<p class="text-sm text-destructive" role="alert">{planError}</p>{/if}
+			{#if planError}
+				<p class="text-sm text-destructive" role="alert">{planError}</p>
+			{/if}
 			{#if plan}
 				<div class="space-y-3 rounded-md border p-3 text-sm">
 					<p>
@@ -498,7 +502,9 @@
 					{#if plan.unassigned.length}
 						<p class="font-medium text-destructive">Ohne Raum:</p>
 						<ul class="list-disc pl-5">
-							{#each plan.unassigned as u, i (i)}<li>{dayLabel(u.date)}: {u.reason}</li>{/each}
+							{#each plan.unassigned as u, i (i)}
+								<li>{dayLabel(u.date)}: {u.reason}</li>
+							{/each}
 						</ul>
 					{/if}
 				</div>
@@ -557,9 +563,11 @@
 					Grobe Einschätzung genügt. Je niedriger die Stufe, desto lieber vergibt der Planer den
 					Raum.
 				</p>
-				{#if rFields.heatingLevel}<p class="text-sm text-destructive">
+				{#if rFields.heatingLevel}
+					<p class="text-sm text-destructive">
 						{rFields.heatingLevel}
-					</p>{/if}
+					</p>
+				{/if}
 			</div>
 			<FormField label="Merkmale" id="room-features">
 				<MultiSelect
@@ -587,7 +595,9 @@
 										{formatDateDe(b.startsOn)}{b.endsOn !== b.startsOn
 											? ` – ${formatDateDe(b.endsOn)}`
 											: ''}
-										{#if b.reason}<span class="text-muted-foreground"> · {b.reason}</span>{/if}
+										{#if b.reason}
+											<span class="text-muted-foreground"> · {b.reason}</span>
+										{/if}
 									</span>
 									<Button type="button" size="sm" variant="ghost" onclick={() => removeBlock(b)}
 										>Aufheben</Button
@@ -617,10 +627,14 @@
 							>Sperren</Button
 						>
 					</div>
-					{#if bError}<p class="text-sm text-destructive" role="alert">{bError}</p>{/if}
+					{#if bError}
+						<p class="text-sm text-destructive" role="alert">{bError}</p>
+					{/if}
 				</div>
 			{/if}
-			{#if rError}<p class="text-sm text-destructive" role="alert">{rError}</p>{/if}
+			{#if rError}
+				<p class="text-sm text-destructive" role="alert">{rError}</p>
+			{/if}
 		</form>
 		<Dialog.Footer class="mx-0 mb-0 border-t p-4">
 			<Button type="button" variant="outline" onclick={() => (roomOpen = false)}>Abbrechen</Button>
