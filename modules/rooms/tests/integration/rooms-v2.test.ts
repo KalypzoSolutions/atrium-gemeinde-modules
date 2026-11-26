@@ -2,20 +2,7 @@
  * Raumplanung 2.0: „Raum wie dieser“, Verlegen wenn eine andere Gruppe den Raum braucht (mit Widerspruch),
  * Drag & Drop der Raumverwaltung, Tauschanfragen für feste Buchungen, Gruppen, Heizaufwand.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-	adminContext,
-	apiCall,
-	contextForEmail,
-	createApiKey,
-	createRole,
-	createUser,
-	enableModule,
-	registerCoreApi,
-	registerModule,
-	syncModules,
-	useTestDatabase
-} from '$testing';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { setTodayForTests } from '$lib/sdk/dates';
 import roomsModule from '$modules/rooms/module';
 import type {
@@ -29,6 +16,19 @@ import type {
 	Room,
 	SwapInfo
 } from '$modules/rooms/schemas';
+import {
+	adminContext,
+	apiCall,
+	contextForEmail,
+	createApiKey,
+	createRole,
+	createUser,
+	enableModule,
+	registerCoreApi,
+	registerModule,
+	syncModules,
+	useTestDatabase
+} from '$testing';
 
 const B = '/modules/rooms';
 const DAY = '2026-11-18';
@@ -324,7 +324,7 @@ describe('Tauschanfragen', () => {
 			swapOptions: { targetTitle: string; proposedRoomId: string }[];
 		};
 		expect(details.swapOptions[0]).toMatchObject({ targetTitle: 'Orgelstunde' });
-		expect(details.swapOptions[0]!.proposedRoomId).toBe(rooms.Gruppenraum);
+		expect<unknown>(details.swapOptions[0]!.proposedRoomId).toBe(rooms.Gruppenraum);
 	});
 
 	it('Anfrage stellen, die Gruppe der festen Buchung nimmt an', async () => {

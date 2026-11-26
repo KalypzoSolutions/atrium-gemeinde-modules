@@ -1,10 +1,5 @@
 <script lang="ts">
-	// Belegungsplan: Woche (Räume × Tage, Standard), Tag (Räume × Uhrzeit), „Meine Buchungen“. Termine in Gruppenfarbe,
-	// verlegte gestrichelt, ohne Raum rot. Die Raumverwaltung verschiebt Termine per Drag & Drop: beim Anfassen werden
-	// alle Räume geprüft (grün = passt, schraffiert = Grund), Ablegen nur auf passende Räume am selben Tag.
-	// Auf dem Handy werden Woche und Tag zur Liste.
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import Check from '@lucide/svelte/icons/check';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Info from '@lucide/svelte/icons/info';
@@ -12,15 +7,13 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import Repeat from '@lucide/svelte/icons/repeat';
 	import Settings from '@lucide/svelte/icons/settings';
-	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
-	import { apiFetch, can } from '$lib/sdk/client';
-	import { addDays, formatDateDe } from '$lib/sdk/dates';
-	import { Button } from '$lib/components/ui/button';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
-	import { SelectField } from '$lib/components/ui/select-field';
-	import * as Tabs from '$lib/components/ui/tabs';
+	// Belegungsplan: Woche (Räume × Tage, Standard), Tag (Räume × Uhrzeit), „Meine Buchungen“. Termine in Gruppenfarbe,
+	// verlegte gestrichelt, ohne Raum rot. Die Raumverwaltung verschiebt Termine per Drag & Drop: beim Anfassen werden
+	// alle Räume geprüft (grün = passt, schraffiert = Grund), Ablegen nur auf passende Räume am selben Tag.
+	// Auf dem Handy werden Woche und Tag zur Liste.
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import {
 		EmptyState,
 		ErrorState,
@@ -28,21 +21,28 @@
 		PageHeader,
 		toastWithUndo
 	} from '$lib/components/layout';
-	import { PERM_CREATE, PERM_MANAGE, type DropTarget, type Occurrence } from '../schemas';
+	import { Button } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import { Input } from '$lib/components/ui/input';
+	import { SelectField } from '$lib/components/ui/select-field';
+	import * as Tabs from '$lib/components/ui/tabs';
+	import { apiFetch, can } from '$lib/sdk/client';
+	import { addDays, formatDateDe } from '$lib/sdk/dates';
+	import { type DropTarget, type Occurrence, PERM_CREATE, PERM_MANAGE } from '../schemas';
 	import BookingDialog from './BookingDialog.svelte';
 	import HeatMeter from './HeatMeter.svelte';
-	import SwapDialog from './SwapDialog.svelte';
 	import {
-		WEEKDAY_SHORT,
 		blockStyle,
 		dayLabel,
 		errorInfo,
 		groupColor,
 		isDate,
 		mondayOf,
+		type RoomsMeta,
 		toMinutes,
-		type RoomsMeta
+		WEEKDAY_SHORT
 	} from './helpers';
+	import SwapDialog from './SwapDialog.svelte';
 
 	const permissions = $derived((page.data.permissions ?? []) as string[]);
 	const canCreate = $derived(can(permissions, PERM_CREATE));
@@ -344,16 +344,24 @@
 			: ''}"
 	>
 		<span class="flex w-full min-w-0 items-start gap-1 font-semibold">
-			{#if o.recurring}<Repeat class="mt-px size-3 shrink-0" aria-label="Serie" />{/if}
-			{#if o.pinned}<Pin class="mt-px size-3 shrink-0" aria-label="festgelegt" />{/if}
+			{#if o.recurring}
+				<Repeat class="mt-px size-3 shrink-0" aria-label="Serie" />
+			{/if}
+			{#if o.pinned}
+				<Pin class="mt-px size-3 shrink-0" aria-label="festgelegt" />
+			{/if}
 			<span class="[overflow-wrap:anywhere]">{o.title}</span>
 		</span>
 		<span class="text-[11px] text-muted-foreground">
 			{o.startsAt}–{o.endsAt}{compact ? '' : ` · ${o.persons} P.`}{o.mode === 'fixed'
 				? ' · fest'
 				: ''}
-			{#if o.moved}<span class="text-warning"> · verlegt</span>{/if}
-			{#if !o.roomId}<span class="text-destructive"> · ohne Raum</span>{/if}
+			{#if o.moved}
+				<span class="text-warning"> · verlegt</span>
+			{/if}
+			{#if !o.roomId}
+				<span class="text-destructive"> · ohne Raum</span>
+			{/if}
 		</span>
 	</button>
 {/snippet}
@@ -368,7 +376,11 @@
 					: 'bg-background text-muted-foreground'
 			]}
 		>
-			{#if t.ok}<Check class="size-3 shrink-0" />{:else}<X class="size-3 shrink-0" />{/if}
+			{#if t.ok}
+				<Check class="size-3 shrink-0" />
+			{:else}
+				<X class="size-3 shrink-0" />
+			{/if}
 			{t.label}
 		</span>
 	{/if}
@@ -404,7 +416,9 @@
 								)}
 							>
 								<span class="flex items-center gap-1 font-semibold">
-									{#if o.recurring}<Repeat class="size-3.5 shrink-0" aria-label="Serie" />{/if}
+									{#if o.recurring}
+										<Repeat class="size-3.5 shrink-0" aria-label="Serie" />
+									{/if}
 									<span class="truncate">{o.title}</span>
 								</span>
 								<span class="block text-xs text-muted-foreground">
@@ -412,9 +426,12 @@
 										{o.roomName ?? (o.planned ? 'Ohne Raum' : 'Raum folgt')}
 									</span>
 									· {o.persons} Pers.{o.groupName ? ` · ${o.groupName}` : ''}
-									{#if o.moved}<span class="text-warning"> · verlegt</span>{/if}
+									{#if o.moved}
+										<span class="text-warning"> · verlegt</span>
+									{/if}
 									{#if view !== 'mine'}
-										· {o.ownerName}{/if}
+										· {o.ownerName}
+									{/if}
 								</span>
 							</span>
 						</button>
@@ -453,7 +470,9 @@
 			? 'Lege zuerst Räume und ihre Merkmale in der Verwaltung an.'
 			: 'Die Raumverwaltung hat noch keine Räume angelegt.'}
 	>
-		{#if canManage}<Button href="/modules/rooms/admin">Räume anlegen</Button>{/if}
+		{#if canManage}
+			<Button href="/modules/rooms/admin">Räume anlegen</Button>
+		{/if}
 	</EmptyState>
 {:else}
 	<div class="space-y-4">
@@ -534,8 +553,8 @@
 							{autoMoved.length === 1 ? 'Termin' : 'Termine'} automatisch verlegt
 						</b>
 						– {[...new Set(autoMoved.map((o) => o.title))].slice(0, 3).join(', ')}
-						{autoMoved.length === 1 ? 'ist' : 'sind'} in einen anderen Raum umgezogen, weil eine andere
-						Gruppe den Raum brauchte.
+						{autoMoved.length === 1 ? 'ist' : 'sind'} in einen anderen Raum umgezogen, weil eine
+						andere Gruppe den Raum brauchte.
 					{/if}
 					{#if unassigned.length}
 						<b class="text-destructive">{unassigned.length} ohne Raum:</b>
@@ -571,7 +590,8 @@
 								class={[
 									'mx-auto mt-0.5 grid size-7 place-items-center rounded-full text-[15px] text-foreground',
 									d === today && 'bg-primary text-primary-foreground'
-								]}>{dayNumber(d)}</b
+								]}
+								>{dayNumber(d)}</b
 							>
 						</button>
 					{/each}
@@ -603,7 +623,9 @@
 								{#each cell(room.id, d) as o (o.key)}
 									{@render chip(o, true)}
 								{/each}
-								{#if t && !t.current}<div class="h-8"></div>{/if}
+								{#if t && !t.current}
+									<div class="h-8"></div>
+								{/if}
 								{@render dropHint(t)}
 							</div>
 						{/each}
@@ -621,8 +643,9 @@
 					<span class="size-2.5 rounded-sm bg-destructive"></span>ohne Raum
 				</span>
 				<span class="text-warning">- - verlegt</span>
-				{#if canManage}<span>Termine lassen sich per Drag &amp; Drop in andere Räume ziehen.</span
-					>{/if}
+				{#if canManage}
+					<span>Termine lassen sich per Drag &amp; Drop in andere Räume ziehen.</span>
+				{/if}
 			</div>
 			<!-- Handy: Liste je Tag -->
 			<div class="space-y-4 sm:hidden">
@@ -752,9 +775,9 @@
 					{pending?.occ.mode === 'fixed' ? 'Feste Buchung verschieben?' : 'Serie verschieben'}
 				</Dialog.Title>
 				<Dialog.Description>
-					„{pending?.occ.title}“ von {pending?.occ.roomName ?? 'ohne Raum'} nach {roomName(
-						pending?.roomId ?? null
-					)} am {pending ? formatDateDe(pending.occ.date) : ''}. Die Gruppe wird benachrichtigt.
+					„{pending?.occ.title}“ von {pending?.occ.roomName ?? 'ohne Raum'} nach
+					{roomName(pending?.roomId ?? null)} am {pending ? formatDateDe(pending.occ.date) : ''}.
+					Die Gruppe wird benachrichtigt.
 				</Dialog.Description>
 			</Dialog.Header>
 			{#if pending?.occ.recurring}
@@ -777,7 +800,9 @@
 					{/each}
 				</div>
 			{/if}
-			{#if placeError}<p class="text-sm text-destructive" role="alert">{placeError}</p>{/if}
+			{#if placeError}
+				<p class="text-sm text-destructive" role="alert">{placeError}</p>
+			{/if}
 			<Dialog.Footer>
 				<Button variant="outline" onclick={() => ((placeOpen = false), (pending = null))}>
 					Abbrechen

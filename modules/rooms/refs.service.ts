@@ -10,16 +10,16 @@ import {
 	inList,
 	isCoreError,
 	moduleDb,
-	rowsOf,
 	type RequestContext,
+	rowsOf,
 	type Tx
 } from '$lib/sdk/server';
 import {
+	type BookingSpec,
 	noRoomError,
 	toWrite,
 	validateSpec,
-	virtualBooking,
-	type BookingSpec
+	virtualBooking
 } from './bookings.service';
 import type {
 	EventRoomAssignment,
@@ -30,34 +30,34 @@ import type {
 	RoomsService
 } from './contract';
 import {
+	type BookingRow,
 	insertBooking,
 	loadAssignments,
 	loadBookingByEvent,
 	loadFeatures,
 	loadRooms,
-	updateBooking,
-	type BookingRow
+	updateBooking
 } from './data';
 import { notifyPlanChanges } from './notify';
 import {
 	computePlan,
 	loadPlanContext,
 	lockPlanning,
-	plannedDates,
-	replan,
 	type PlanContext,
-	type PlanOutcome
+	type PlanOutcome,
+	plannedDates,
+	replan
 } from './planning.service';
 import {
+	bookingInput,
+	bookingMode,
 	MODULE_ID,
 	PERM_CREATE,
 	PERM_FIX,
 	PERM_VIEW,
+	type PlanConflict,
 	ROOMS_NO_ROOM,
-	bookingInput,
-	bookingMode,
-	recurrenceRule,
-	type PlanConflict
+	recurrenceRule
 } from './schemas';
 
 type Failure = Extract<EventRoomResult, { ok: false }>;

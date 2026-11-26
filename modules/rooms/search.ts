@@ -3,15 +3,15 @@
  * `rooms.booking.view` (die Belegung ist gemeindeöffentlich); Buchungen mit nächstem kommenden Termin.
  */
 import { sql } from 'drizzle-orm';
+import { formatDateDe } from '$lib/sdk/dates';
 import {
 	addDays,
-	moduleDb,
 	type ModuleSearchProvider,
+	moduleDb,
 	rowsOf,
 	type SearchHit,
 	todayBerlin
 } from '$lib/sdk/server';
-import { formatDateDe } from '$lib/sdk/dates';
 import { loadBooking } from './data';
 import { expandDates } from './recurrence';
 import { MODULE_ID, PERM_VIEW } from './schemas';

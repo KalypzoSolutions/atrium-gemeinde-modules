@@ -2,12 +2,12 @@
 	// Tauschanfrage ansehen und beantworten (Gruppe der festen Buchung bzw. Raumverwaltung) oder zurückziehen.
 	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import { page } from '$app/state';
-	import { apiFetch } from '$lib/sdk/client';
-	import { formatDateDe } from '$lib/sdk/dates';
+	import { ErrorState, LoadingState } from '$lib/components/layout';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { ErrorState, LoadingState } from '$lib/components/layout';
+	import { apiFetch } from '$lib/sdk/client';
+	import { formatDateDe } from '$lib/sdk/dates';
 	import { SWAP_STATUS_LABELS, type SwapInfo } from '../schemas';
 	import { errorInfo, weekdayShort } from './helpers';
 
@@ -70,9 +70,8 @@
 			</Dialog.Title>
 			<Dialog.Description>
 				{#if swap}
-					„{swap.requestTitle}“ ({swap.requestPersons} Personen) · {weekdayShort(swap.date)}, {formatDateDe(
-						swap.date
-					)},
+					„{swap.requestTitle}“ ({swap.requestPersons} Personen) · {weekdayShort(swap.date)},
+					{formatDateDe(swap.date)},
 					{swap.startsAt}–{swap.endsAt} · von {swap.requesterName ?? 'Unbekannt'}
 				{/if}
 			</Dialog.Description>
@@ -97,7 +96,9 @@
 						<span class="text-xs text-muted-foreground">gleiche Zeit, passt für euch</span>
 					</div>
 				</div>
-				{#if swap.message}<p class="rounded-md bg-muted p-3">„{swap.message}“</p>{/if}
+				{#if swap.message}
+					<p class="rounded-md bg-muted p-3">„{swap.message}“</p>
+				{/if}
 				<div class="flex flex-wrap items-center gap-2">
 					<Badge variant={swap.status === 'pending' ? 'outline' : 'secondary'}>
 						{SWAP_STATUS_LABELS[swap.status]}
@@ -110,7 +111,9 @@
 				</div>
 			</div>
 		{/if}
-		{#if error}<ErrorState message={error} compact />{/if}
+		{#if error}
+			<ErrorState message={error} compact />
+		{/if}
 		<Dialog.Footer>
 			{#if swap?.status === 'pending' && swap.canDecide}
 				<Button

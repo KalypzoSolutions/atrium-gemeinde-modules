@@ -12,7 +12,6 @@ import {
 	type RequestContext
 } from '$lib/sdk/server';
 import { loadFeatures, loadGroups, loadRooms } from './data';
-import { expireSwaps } from './swaps.service';
 import { eventsService } from './events-link';
 import { notifyPlanChanges, notifySwap } from './notify';
 import {
@@ -21,10 +20,11 @@ import {
 	horizonEnd,
 	loadPlanContext,
 	lockPlanning,
-	replan,
-	type PlanOutcome
+	type PlanOutcome,
+	replan
 } from './planning.service';
-import { MODULE_ID, PERM_MANAGE, PERM_VIEW, planInput, type PlanPreview } from './schemas';
+import { MODULE_ID, PERM_MANAGE, PERM_VIEW, type PlanPreview, planInput } from './schemas';
+import { expireSwaps } from './swaps.service';
 
 const tags = ['Modul: rooms'];
 

@@ -4,6 +4,8 @@ import pkg from './atrium-module.json';
 import { bookingEndpoints } from './bookings.endpoints';
 import type { RoomsService } from './contract';
 import { roomsDashboard } from './dashboard';
+import m0001 from './migrations/0001_init.sql?raw';
+import m0002 from './migrations/0002_raumplanung2.sql?raw';
 import { planEndpoints, replanJob } from './plan.endpoints';
 import { onUserDeleted, resetAreas, resetUsers, subjectExport } from './privacy';
 import { roomsService } from './refs.service';
@@ -25,8 +27,6 @@ import {
 } from './schemas';
 import { roomsSearch } from './search';
 import { workflowEndpoints } from './workflow.endpoints';
-import m0001 from './migrations/0001_init.sql?raw';
-import m0002 from './migrations/0002_raumplanung2.sql?raw';
 
 const int = (min: number, max: number) => z.number().int().min(min).max(max);
 
